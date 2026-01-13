@@ -191,7 +191,7 @@ qdrant-client==1.16.2
 redis==7.1.0
 referencing==0.36.2
 regex==2025.11.3
--e file:///Users/junhoyoon/Develop/NetAge/ReMe
+-e .
 requests==2.32.5
 requests-oauthlib==2.0.0
 rfc3339-validator==0.1.4
