@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reme_ai"
+dynamic = ["version"]
+description = "Remember Me, Refine Me."
+authors = [
+    { name = "jinli.yl", email = "jinli.yl@alibaba-inc.com" },
+    { name = "dengjiaji.djj", email = "dengjiaji.djj@alibaba-inc.com" },
+    { name = "caozouying.czy", email = "caozouying.czy@alibaba-inc.com" },
+    { name = "weikangzhou.zwk", email = "weikangzhou.zwk@alibaba-inc.com" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+
+keywords = ["llm", "memory", "experience", "memoryscope", "ai", "mcp", "http"]
+
+dependencies = [
+    "flowllm[reme]>=0.2.0.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyter-book",
+    "ghp-import",
+    "myst-nb",
+    "sphinxcontrib-bibtex",
+    "furo",
+    "sphinxcontrib-mermaid",
+    "pre-commit",
+]
+
+token = [
+    "flowllm[token]>=0.2.0.10"
+]
+
+full = [
+    "reme_ai[dev,token]"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["reme_ai*"]
+exclude = ["test*", "cookbook*", "doc*", "library*", "dist*"]
+
+[tool.setuptools.package-data]
+reme_ai = [
+    "**/*.yaml",
+    "**/*.py",
+    "**/*.json",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "reme_ai.__version__" }
+
+[project.urls]
+Homepage = "https://github.com/agentscope-ai/ReMe"
+Documentation = "https://reme.agentscope.io/"
+Repository = "https://github.com/agentscope-ai/ReMe"
+
+[project.scripts]
+reme = "reme_ai.main:main"
+
+# python -m build && twine upload dist/*

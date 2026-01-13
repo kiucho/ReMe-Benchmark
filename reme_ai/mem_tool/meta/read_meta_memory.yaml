@@ -1,0 +1,16 @@
+tool: |
+  Read the memory metadata registry to see what types of memories are being tracked.
+  Use this tool to retrieve all registered memory types and their targets.
+  This helps understand what memory categories are available for storing and retrieving information.
+
+type_identity: |
+  Self-cognition memory storing agent's identity, personality, and current state.
+
+type_personal: |
+  Person-specific memory storing preferences and context about specific individuals.
+
+type_procedural: |
+  Procedural memory storing how-to knowledge and step-by-step processes.
+
+type_tool: |
+  Tool memory storing tool usage patterns, success rates, token consumption, and latency.

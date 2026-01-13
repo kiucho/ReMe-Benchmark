@@ -1,0 +1,32 @@
+tool: |
+  Retrieve memories from the memory store using vector similarity search.
+  Use this tool to find relevant memories based on semantic similarity to the query.
+  The search returns the most relevant memories ranked by similarity score.
+
+tool_multiple: |
+  Retrieve memories from the memory store using multiple queries with vector similarity search.
+  Use this tool to find relevant memories based on semantic similarity to multiple queries.
+  This is useful when you need to search for different types of information in a single operation.
+  The search returns the most relevant memories ranked by similarity score for each query.
+
+memory_type: |
+  The type of memory to search for. Must be one of:
+  - "identity": Information about the AI agent's identity, role, or characteristics
+  - "personal": Information about users, their preferences, or personal details
+  - "procedural": Step-by-step instructions, workflows, or how-to knowledge
+  - "tool": Tool usage tips, examples, and best practices
+
+memory_target: |
+  The target of the memory to search within.
+  - For "personal" memory: the person's name or identifier (e.g., "john", "alice")
+  - For "procedural" memory: the process or task name (e.g., "deployment", "authentication")
+  - For "tool" memory: the tool name (e.g., "search_tool", "calculator")
+  - For "identity" memory: typically "self" or the agent's identifier
+
+query: |
+  The query text for vector similarity search.
+  Use descriptive queries that capture the semantic meaning of what you're looking for.
+
+query_items: |
+  A list of query items for vector similarity search.
+  Each item can include metadata_filters to narrow down search results.

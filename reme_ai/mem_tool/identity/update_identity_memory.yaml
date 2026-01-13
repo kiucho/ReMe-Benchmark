@@ -1,0 +1,7 @@
+tool: |
+  Update the identity memory for the agent.
+  Store self-cognition information such as identity, role, personality, or current state.
+
+identity_memory: |
+  The identity memory content to store.
+  Should be a clear statement capturing the agent's self-cognition or current state.

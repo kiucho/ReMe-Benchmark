@@ -1,0 +1,42 @@
+"""Specialized agent for extracting and managing tool usage guidelines and best practices."""
+
+from ..base_memory_agent import BaseMemoryAgent
+from ...core.context import C
+from ...core.enumeration import Role, MemoryType
+from ...core.schema import Message
+from ...core.utils import get_now_time, format_messages
+
+
+@C.register_op()
+class ToolSummarizer(BaseMemoryAgent):
+    """Analyzes tool executions to extract effective usage patterns and optimization tips."""
+
+    memory_type: MemoryType = MemoryType.TOOL
+
+    async def build_messages(self) -> list[Message]:
+        """Construct messages with context, memory_target, and memory_type information."""
+        system_prompt = self.prompt_format(
+            prompt_name="system_prompt",
+            now_time=get_now_time(),
+            context=format_messages(self.get_messages()),
+            memory_type=self.memory_type.value,
+            memory_target=self.memory_target,
+        )
+
+        messages = [
+            Message(role=Role.SYSTEM, content=system_prompt),
+            Message(role=Role.USER, content=self.get_prompt("user_message")),
+        ]
+        return messages
+
+    async def _acting_step(self, assistant_message: Message, step: int, **kwargs) -> list[Message]:
+        """Execute tool calls with ref_memory_id, memory_target, memory_type, and author context."""
+        return await super()._acting_step(
+            assistant_message,
+            step,
+            ref_memory_id=self.ref_memory_id,
+            memory_target=self.memory_target,
+            memory_type=self.memory_type.value,
+            author=self.author,
+            **kwargs,
+        )

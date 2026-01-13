@@ -1,0 +1,11 @@
+tool: |
+  Read history memory by ID.
+
+tool_multiple: |
+  Read multiple history memories by IDs.
+
+memory_id: |
+  Unique identifier of the history memory.
+
+memory_ids: |
+  List of unique identifiers of history memories.

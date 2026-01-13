@@ -1,0 +1,19 @@
+tool: |
+  Add a summary memory to the vector store for future retrieval.
+  Use this tool to store a summarized version of the provided context.
+  The LLM should first summarize the context, then call this tool with the summarized content.
+
+  This tool is specifically designed for storing summaries of conversations, events, or information
+  that has been condensed from a larger context. Examples:
+  - Summarizing a long conversation: "User discussed project requirements for a web app with authentication"
+  - Summarizing a decision: "Team decided to use PostgreSQL for the database after evaluating options"
+  - Summarizing an event: "Successfully deployed version 2.0 to production with new features"
+
+summary_memory: |
+  The summarized content to store as memory.
+  Should be a clear, concise summary that captures the key information from the context.
+  Keep it focused and informative - aim for 1-3 sentences that convey the essential points.
+  Examples:
+  - "User prefers Python for backend development and has experience with FastAPI framework"
+  - "Project deadline is January 15th, requires authentication, payment integration, and admin dashboard"
+  - "Bug in user registration was caused by missing email validation, fixed by adding regex check"

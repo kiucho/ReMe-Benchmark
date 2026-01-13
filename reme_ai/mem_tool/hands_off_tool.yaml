@@ -1,0 +1,19 @@
+tool: |
+  Distribute a memory task to the appropriate agent based on memory_type.
+  Use this tool to hand off memory summarization to specialized agents.
+  Examples: summarizing user preferences, extracting procedural knowledge, or analyzing tool usage patterns.
+
+tool_multiple: |
+  Distribute multiple memory tasks to appropriate agents in parallel.
+  Use this tool to hand off multiple memory summarization tasks efficiently.
+  Each task will be processed by its corresponding specialized agent based on memory_type.
+
+memory_type: |
+  The type of memory to process. Determines which specialized agent handles the task.
+
+memory_target: |
+  The target entity for this memory.
+  This helps the agent focus on the specific subject of the memory task.
+
+memory_tasks: |
+  A list of memory tasks to distribute, each with memory_type and memory_target.

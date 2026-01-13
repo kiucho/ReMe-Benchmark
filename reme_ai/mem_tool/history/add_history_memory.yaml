@@ -1,0 +1,14 @@
+tool: |
+  Add history memory from conversation messages.
+
+tool_multiple: |
+  Add multiple history memories in a single operation.
+
+messages: |
+  List of message objects with 'role' and 'content' fields.
+
+metadata: |
+  Optional metadata (time, session_id, topic, etc.).
+
+histories: |
+  List of history objects, each with messages and optional metadata.

@@ -1,0 +1,24 @@
+tool: |
+  Add a memory metadata entry to register a new memory type and target.
+  Use this tool to define what types of memories should be tracked, such as:
+  - Personal memories: "John", "Alice" (person-specific preferences and context)
+  - Procedural memories: "deployment_process", "code_review_steps" (how-to knowledge)
+
+tool_multiple: |
+  Add multiple memory metadata entries to register multiple memory types and targets at once.
+  Use this tool to define multiple memory tracking categories in a single operation.
+  Each entry specifies a memory_type and memory_target for organizing different memory domains.
+
+meta_memories: |
+  A list of memory metadata entries to add. Each entry contains memory_type and memory_target.
+
+memory_type: |
+  The type of memory to register. Valid values are: personal, procedural.
+  - personal: Person-specific memory storing preferences and context about specific individuals
+  - procedural: Procedural memory storing how-to knowledge and step-by-step processes
+
+memory_target: |
+  The target identifier for this memory category.
+  Examples:
+  - For personal memory: person's name (e.g., "John", "Alice")
+  - For procedural memory: domain or topic name (e.g., "deployment", "code_review")

@@ -1,0 +1,33 @@
+tool: |
+  Update a memory in the vector store by replacing the old memory with new content.
+  Use this tool when:
+  - The user wants to modify or correct existing information
+  - A memory needs to be updated with new details while keeping its relevance
+  - Information has changed and the old memory is no longer accurate
+  - You need to refine or improve the clarity of stored information
+  Memory ID can be obtained from previous memory retrieval results.
+
+tool_multiple: |
+  Update multiple memories in the vector store by replacing old memories with new content.
+  Use this tool for batch updates when:
+  - The user wants to modify or correct multiple pieces of existing information
+  - Multiple memories need to be updated with new details while keeping their relevance
+  - Information has changed across multiple memories
+  - You need to refine or improve multiple stored memories at once
+  Memory IDs can be obtained from previous memory retrieval results.
+
+memory_id: |
+  The unique identifier (memory_id) of the old memory to be replaced.
+  This ID is returned when memories are retrieved or added.
+
+when_to_use: |
+  Optional condition description for when to retrieve this memory.
+  This field is used for vector embedding to improve retrieval accuracy by providing contextual information.
+
+memory_content: |
+  The new content of the memory to store.
+  Should be a clear, concise statement that captures the updated information to remember.
+  Keep it focused on a single piece of information for better retrieval accuracy.
+
+memories: |
+  A list of memory update objects.

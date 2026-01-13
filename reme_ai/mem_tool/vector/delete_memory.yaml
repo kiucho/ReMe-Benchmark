@@ -1,0 +1,25 @@
+tool: |
+  Delete a memory from the vector store using its unique ID.
+  Use this tool when:
+  - The user explicitly requests to remove or forget information
+  - A memory is identified as outdated, incorrect, or no longer relevant
+  - Information needs to be removed for privacy or compliance reasons
+  - Duplicate or conflicting memories need to be cleaned up
+  Memory ID can be obtained from previous memory retrieval results.
+
+tool_multiple: |
+  Delete multiple memories from the vector store using their unique IDs.
+  Use this tool for batch deletion when:
+  - The user explicitly requests to remove or forget multiple pieces of information
+  - Multiple memories are identified as outdated, incorrect, or no longer relevant
+  - Bulk cleanup of information is needed for privacy or compliance reasons
+  - Multiple duplicate or conflicting memories need to be removed
+  Memory IDs can be obtained from previous memory retrieval results.
+
+memory_id: |
+  The unique identifier (memory_id) of the memory to delete.
+  This ID is returned when memories are retrieved or added.
+
+memory_ids: |
+  A list of unique identifiers (memory_ids) of the memories to delete.
+  Each ID should be a valid memory_id obtained from previous operations.
