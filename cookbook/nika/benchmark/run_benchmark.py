@@ -139,6 +139,19 @@ def get_all_scores_from_session(session_dir: str) -> tuple[float, float, float]:
         return 0.0, 0.0, 0.0
 
 
+def get_llm_judge_score_from_session(session_dir: str) -> int:
+    """Get LLM Judge overall_score from llm_judge.json."""
+    try:
+        judge_path = os.path.join(session_dir, "llm_judge.json")
+        if not os.path.exists(judge_path):
+            return 0
+        with open(judge_path) as f:
+            judge_result = json.load(f)
+        return judge_result.get("scores", {}).get("overall_score", {}).get("score", 0)
+    except Exception:
+        return 0
+
+
 def run_benchmark(
     backend_model: str = "gpt-5-mini",
     max_steps: int = 40,
@@ -244,10 +257,11 @@ def run_benchmark(
                     if session_dirs:
                         latest_session_dir = str(max(session_dirs, key=os.path.getmtime))
                         detection_score, loc_f1, rca_f1 = get_all_scores_from_session(latest_session_dir)
-                        print(f"  Scores - Detection: {detection_score}, Loc F1: {loc_f1}, RCA F1: {rca_f1}")
+                        llm_judge_score = get_llm_judge_score_from_session(latest_session_dir)
+                        print(f"  Scores - Detection: {detection_score}, Loc F1: {loc_f1}, RCA F1: {rca_f1}, LLM Judge: {llm_judge_score}")
 
-                        # Perfect score condition: All must be 1.0
-                        is_perfect = (detection_score == 1.0 and loc_f1 == 1.0 and rca_f1 == 1.0)
+                        # Perfect score condition: LLM Judge overall_score >= 4
+                        is_perfect = llm_judge_score >= 4
 
                         # Memory addition logic (for num_trials retry)
                         if use_memory and use_memory_addition:
@@ -283,13 +297,14 @@ def run_benchmark(
             final_detection_score = detection_score
             final_loc_f1 = loc_f1
             final_rca_f1 = rca_f1
+            final_llm_judge_score = llm_judge_score
 
             # Success: stop retrying
             if is_perfect:
                 print(f"  Task succeeded on trial {trial_id + 1}")
                 break
 
-        print(f"  Final Scores - Detection: {final_detection_score}, Loc F1: {final_loc_f1}, RCA F1: {final_rca_f1}")
+        print(f"  Final Scores - Detection: {final_detection_score}, Loc F1: {final_loc_f1}, RCA F1: {final_rca_f1}, LLM Judge: {final_llm_judge_score}")
 
         # Dump memory after each task to prevent data loss on interruption
         if use_memory:
