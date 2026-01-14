@@ -267,18 +267,23 @@ def run_benchmark(
                         if use_memory and use_memory_addition:
                             # Pass 1.0 if perfect, else 0.0 (simplification for memory utility)
                             combined_score = 1.0 if is_perfect else 0.0
+                            task_history = getattr(agent, "task_history", []) or []
                             
-                            new_memories = agent.store_memory_from_result(
+                            new_memories, memory_extraction_info = agent.store_memory_from_result(
                                 task_id=problem,
-                                task_history=[],
+                                task_history=task_history,
                                 score=combined_score,
                             )
+
+                            # Save memory extraction info to session directory
+                            memory_extraction_path = os.path.join(latest_session_dir, "memory_extraction.json")
+                            with open(memory_extraction_path, "w") as f:
+                                json.dump(memory_extraction_info, f, indent=2, ensure_ascii=False, default=str)
+                            print(f"  Memory extraction info saved to {memory_extraction_path}")
 
                             if not is_perfect and new_memories:
                                 # Failed: use these memories for next retry
                                 previous_memories = new_memories
-                                # Delete from vector store (will be used as previous_memories)
-                                agent.delete_memory_by_ids([mem["memory_id"] for mem in new_memories])
                             else:
                                 # Success or no memories: clear previous_memories
                                 previous_memories = []

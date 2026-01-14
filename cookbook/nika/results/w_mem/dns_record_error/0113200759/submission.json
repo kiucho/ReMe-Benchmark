@@ -1,1 +1,0 @@
-{"is_anomaly": true, "faulty_devices": ["router_dist_1_1", "router_dist_2_1", "core_routers", "server_access_router", "dhcp_server"], "root_cause_name": ["frr_service_down", "dhcp_service_down"]}

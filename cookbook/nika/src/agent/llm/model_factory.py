@@ -9,6 +9,10 @@ from langchain_openai import ChatOpenAI, AzureChatOpenAI
 load_dotenv()
 
 
+def _get_reasoning_model_kwargs() -> dict:
+    return {"reasoning_effort": "medium"}
+
+
 def load_model(backend_model: str = "gpt-oss:20b") -> BaseChatModel:
     if backend_model in ["gpt-oss:20b", "qwen3:32b"]:
         llm = ChatOllama(
@@ -18,8 +22,10 @@ def load_model(backend_model: str = "gpt-oss:20b") -> BaseChatModel:
             base_url=os.getenv("OLLAMA_API_URL"),
         )
     elif backend_model in ["gpt-5-mini", "gpt-5"]:
+        model_kwargs = _get_reasoning_model_kwargs()
         llm = ChatOpenAI(
             model_name=backend_model,
+            model_kwargs=model_kwargs,
         )
     elif backend_model in ["deepseek-chat", "deepseek-reasoner"]:
         llm = ChatDeepSeek(
@@ -27,6 +33,7 @@ def load_model(backend_model: str = "gpt-oss:20b") -> BaseChatModel:
             base_url="https://api.deepseek.com",
         )
     elif backend_model.startswith("azure/"):
+        model_kwargs = _get_reasoning_model_kwargs()
         deployment_name = backend_model.replace("azure/", "")
         llm = AzureChatOpenAI(
             azure_deployment=deployment_name,
@@ -36,6 +43,7 @@ def load_model(backend_model: str = "gpt-oss:20b") -> BaseChatModel:
             temperature=0,
             timeout=180,  # 3 minutes timeout
             max_retries=2,  # Retry up to 2 times on failure
+            # model_kwargs=model_kwargs,
         )
     else:
         raise ValueError(f"Unsupported backend model: {backend_model}")

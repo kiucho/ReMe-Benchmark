@@ -1,1 +1,0 @@
-{"is_anomaly": true, "faulty_devices": ["leaf_router_0_0", "leaf_router_0_1", "spine_router_0", "spine_router_1", "super_spine_router_0"], "root_cause_name": ["frr_service_down"]}

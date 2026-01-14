@@ -1,7 +1,8 @@
 #!/bin/bash
 
+CURR_TIME=$(date +%Y%m%d%H%M%S)
 NUM_TRIALS=1
-EXPERIMENT_NAME=wo_mem
+EXPERIMENT_NAME=wo_mem_${CURR_TIME}
 SEED=42
 BENCHMARK_FILE=benchmark_custom.csv
 

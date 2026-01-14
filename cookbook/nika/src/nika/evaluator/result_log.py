@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 
 from dotenv import load_dotenv
 
+from nika.utils.session import get_experiment_name
+
 load_dotenv()
 RESULTS_DIR = os.getenv("RESULTS_DIR")
 
@@ -41,7 +43,11 @@ class EvalResult:
 
 
 def record_eval_result(eval_result: EvalResult) -> None:
-    log_results_dir = os.path.join(RESULTS_DIR, "0_summary")
+    experiment_name = get_experiment_name()
+    if experiment_name:
+        log_results_dir = os.path.join(RESULTS_DIR, experiment_name, "0_summary")
+    else:
+        log_results_dir = os.path.join(RESULTS_DIR, "0_summary")
     os.makedirs(log_results_dir, exist_ok=True)
 
     log_file_path = os.path.join(log_results_dir, "evaluation_summary.csv")

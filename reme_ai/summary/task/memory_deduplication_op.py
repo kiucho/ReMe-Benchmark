@@ -35,6 +35,9 @@ class MemoryDeduplicationOp(BaseAsyncOp):
 
         logger.info(f"Starting deduplication for {len(task_memories)} task memories")
 
+        # Store pre-deduplication memories for debugging
+        self.context.response.metadata["memory_list_before_dedup"] = task_memories
+
         # Perform deduplication
         deduplicated_task_memories = await self._deduplicate_task_memories(task_memories)
 

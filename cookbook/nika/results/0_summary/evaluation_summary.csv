@@ -1,6 +1,0 @@
-agent_type,backend_model,root_cause_category,root_cause_name,net_env,scenario_topo_size,session_id,in_tokens,out_tokens,steps,tool_calls,tool_errors,time_taken,llm_judge_relevance_score,llm_judge_correctness_score,llm_judge_efficiency_score,llm_judge_clarity_score,llm_judge_final_outcome_score,llm_judge_overall_score,detection_score,localization_accuracy,localization_precision,localization_recall,localization_f1,rca_accuracy,rca_precision,rca_recall,rca_f1
-react,azure/gpt-5.2,end_host_failure,dns_record_error,dc_clos_service,s,0113195911,66631,1865,7,27,0,116.75,2,3,2,4,1,2,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-react,azure/gpt-5.2,end_host_failure,dns_record_error,dc_clos_service,s,0113200247,65967,2846,6,37,0,136.35,3,3,2,4,1,2,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-react,azure/gpt-5.2,end_host_failure,dns_record_error,ospf_enterprise_dhcp,s,0113200759,79112,1780,6,26,0,89.43,2,2,2,3,1,2,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-react,azure/gpt-5.2,end_host_failure,dns_record_error,dc_clos_service,s,0114112259,67496,1782,8,26,0,97.61,3,3,2,4,1,2,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
-react,azure/gpt-5.2,end_host_failure,dns_record_error,dc_clos_service,s,0114112606,54554,1594,7,23,0,93.0,2,2,2,4,1,2,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
