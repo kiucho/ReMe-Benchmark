@@ -5,19 +5,30 @@ import time
 
 import polars as pl
 import requests
+from tqdm import tqdm
 
 from nika.config import RESULTS_DIR
 from nika.net_env.net_env_pool import get_net_env_instance
 from nika.orchestrator.tasks.detection import DetectionSubmission
 from nika.orchestrator.tasks.localization import LocalizationTask
 from nika.orchestrator.tasks.rca import RCATask
-from nika.utils.session import Session
+from nika.utils.session import set_experiment_name
 from scripts.step1_net_env_start import start_net_env
 from scripts.step2_failure_inject import inject_failure
 from scripts.step3_agent_run import start_agent
 from scripts.step4_result_eval import eval_results
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+def wipe_kathara():
+    """Wipe all Kathara resources to ensure clean state."""
+    try:
+        from Kathara.manager.Kathara import Kathara
+        Kathara.get_instance().wipe()
+        print("Kathara wiped successfully")
+    except Exception as e:
+        print(f"Warning: Kathara wipe failed: {e}")
 
 
 # ================== ReMe Memory API Helper Functions ==================
@@ -141,25 +152,40 @@ def run_benchmark(
     memory_workspace_id: str = "nika_v1",
     benchmark_file_name: str = "benchmark_selected.csv",
     num_trials: int = 1,
+    experiment_name: str | None = None,
+    seed: int | None = None,
 ):
     """Run benchmark tests based on the benchmark.csv file.
 
     Args:
         num_trials: Number of retry attempts per task. If > 1, failed attempts
                    generate memories that are used in subsequent retries.
+        experiment_name: Optional name to organize results under a separate directory.
+                        Results will be saved to results/<experiment_name>/<problem>/...
+        seed: Optional seed for reproducible fault injection. Use the same seed 
+              across experiments (e.g., with/without memory) for fair comparison.
     """
+    # Set experiment name for session directory organization
+    set_experiment_name(experiment_name)
+    
     benchmark_file = os.path.join(cur_dir, benchmark_file_name)
     df = pl.read_csv(benchmark_file)
 
     print(f"Running benchmark with memory={'enabled' if use_memory else 'disabled'}")
     print(f"Backend model: {backend_model}, Max steps: {max_steps}, Num trials: {num_trials}")
+    if experiment_name:
+        print(f"Experiment name: {experiment_name} (results will be saved to results/{experiment_name}/...)")
+    if seed is not None:
+        print(f"Using fixed seed: {seed} (for reproducible fault injection)")
 
-    for row in df.iter_rows(named=True):
+    total_tasks = len(df)
+    pbar = tqdm(df.iter_rows(named=True), total=total_tasks, desc="Benchmark Progress")
+    for row in pbar:
         problem = row["problem"]
         scenario = row["scenario"]
         topo_size = row["topo_size"]
 
-        print(f"Running benchmark for Problem: {problem}, Scenario: {scenario}, Topo Size: {topo_size}")
+        pbar.set_description(f"[{problem}|{scenario}|{topo_size}]")
 
         # Track previous memories for retry logic
         previous_memories: list = []
@@ -169,13 +195,16 @@ def run_benchmark(
 
         # Run multiple trials if num_trials > 1
         for trial_id in range(num_trials):
-            print(f"  Trial {trial_id + 1}/{num_trials}")
+            pbar.set_postfix(trial=f"{trial_id + 1}/{num_trials}")
+
+            # Step 0: Wipe Kathara to ensure clean state (prevents contamination from previous runs)
+            wipe_kathara()
 
             # Step 1: Start Network Environment (redeploy for each trial to reset state)
-            start_net_env(scenario, topo_size=topo_size, redeploy=True)
+            start_net_env(scenario, topo_size=topo_size, redeploy=True, experiment_name=experiment_name)
 
             # Step 2: Inject Failure
-            inject_failure(problem_names=[problem])
+            inject_failure(problem_names=[problem], seed=seed)
 
             # Step 3: Start Agent with previous_memories from failed attempts
             agent = start_agent(
@@ -202,7 +231,10 @@ def run_benchmark(
             is_perfect = False
 
             if agent:
-                session_dir = f"{RESULTS_DIR}/{problem}"
+                if experiment_name:
+                    session_dir = f"{RESULTS_DIR}/{experiment_name}/{problem}"
+                else:
+                    session_dir = f"{RESULTS_DIR}/{problem}"
                 if os.path.exists(session_dir):
                     session_dirs = [
                         os.path.join(session_dir, d)
@@ -258,6 +290,18 @@ def run_benchmark(
                 break
 
         print(f"  Final Scores - Detection: {final_detection_score}, Loc F1: {final_loc_f1}, RCA F1: {final_rca_f1}")
+
+        # Dump memory after each task to prevent data loss on interruption
+        if use_memory:
+            if experiment_name:
+                dump_path = f"{RESULTS_DIR}/{experiment_name}/memory_dump_{memory_workspace_id}"
+            else:
+                dump_path = f"{RESULTS_DIR}/memory_dump_{memory_workspace_id}"
+            dump_memory(
+                workspace_id=memory_workspace_id,
+                path=dump_path,
+                api_url=memory_base_url,
+            )
 
         # Finally, destroy the network environment
         net_env = get_net_env_instance(scenario, topo_size=topo_size)
@@ -336,6 +380,23 @@ def main():
         default=1,
         help="Number of retry attempts per task (default: 1). Failed attempts generate memories for retries.",
     )
+    parser.add_argument(
+        "--experiment-name",
+        type=str,
+        default=None,
+        help="Optional experiment name to organize results. Results will be saved to results/<experiment_name>/<problem>/...",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional seed for reproducible fault injection. Use the same seed across experiments (e.g., with/without memory) for fair comparison.",
+    )
+    parser.add_argument(
+        "--resume-memory",
+        action="store_true",
+        help="Load existing memory dump before starting (for resuming interrupted experiments).",
+    )
     args = parser.parse_args()
 
     # If use-memory is set, automatically enable addition and deletion
@@ -344,11 +405,20 @@ def main():
 
     # Initialize memory workspace if memory is enabled
     if args.use_memory:
-        print("Initializing ReMe memory workspace...")
+        if args.experiment_name:
+            dump_path = f"{RESULTS_DIR}/{args.experiment_name}/memory_dump_{args.memory_workspace_id}"
+        else:
+            dump_path = f"{RESULTS_DIR}/memory_dump_{args.memory_workspace_id}"
+        
+        if args.resume_memory:
+            # Resume from existing memory dump
+            print(f"Resuming from existing memory dump: {dump_path}")
+            load_memory(workspace_id=args.memory_workspace_id, path=dump_path, api_url=args.memory_api_url)
+        else:
+            # Fresh start: delete existing workspace
+            print("Initializing ReMe memory workspace (fresh start)...")
         delete_workspace(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
         time.sleep(2)
-        # Optionally load pre-existing memories
-        # load_memory(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
 
     # Run benchmark
     run_benchmark(
@@ -364,13 +434,19 @@ def main():
         memory_workspace_id=args.memory_workspace_id,
         benchmark_file_name=args.benchmark_file,
         num_trials=args.num_trials,
+        experiment_name=args.experiment_name,
+        seed=args.seed,
     )
 
-    # Optionally dump memories after benchmark
+    # Optionally dump memories after benchmark (final dump)
     if args.use_memory:
+        if args.experiment_name:
+            dump_path = f"{RESULTS_DIR}/{args.experiment_name}/memory_dump_{args.memory_workspace_id}"
+        else:
+            dump_path = f"{RESULTS_DIR}/memory_dump_{args.memory_workspace_id}"
         dump_memory(
             workspace_id=args.memory_workspace_id,
-            path=f"./memory_dump_{args.memory_workspace_id}",
+            path=dump_path,
             api_url=args.memory_api_url,
         )
 

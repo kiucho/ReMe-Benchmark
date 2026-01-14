@@ -20,6 +20,7 @@ load_dotenv(verbose=True)
 # The following environment variables should be passed from the MCP client (i.e., the agent)
 LAB_SESSION_ID = os.getenv("LAB_SESSION_ID")
 gt_root_cause_name = os.getenv("root_cause_name")
+SESSION_DIR = os.getenv("SESSION_DIR")  # Full path including experiment_name if set
 
 base_dir = os.getenv("BASE_DIR")
 results_dir = os.getenv("RESULTS_DIR")
@@ -76,11 +77,13 @@ def submit(
         "faulty_devices": faulty_devices,
         "root_cause_name": root_cause_name,
     }
-    os.makedirs(
-        f"{results_dir}/{gt_root_cause_name}/{LAB_SESSION_ID}",
-        exist_ok=True,
-    )
-    with open(f"{results_dir}/{gt_root_cause_name}/{LAB_SESSION_ID}/submission.json", "w+") as log_file:
+    # Use SESSION_DIR if available (includes experiment_name), fallback to old path
+    if SESSION_DIR:
+        submission_path = SESSION_DIR
+    else:
+        submission_path = f"{results_dir}/{gt_root_cause_name}/{LAB_SESSION_ID}"
+    os.makedirs(submission_path, exist_ok=True)
+    with open(f"{submission_path}/submission.json", "w+") as log_file:
         log_file.write(json.dumps(submission_dict))
 
     return ["Submission success."]

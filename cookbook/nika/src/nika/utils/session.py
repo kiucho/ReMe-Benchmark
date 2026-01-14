@@ -3,12 +3,27 @@ import os
 import shutil
 from datetime import datetime
 
-from nika.config import BASE_DIR, RESULTS_DIR
+from nika.config import BASE_DIR, EXPERIMENT_NAME, RESULTS_DIR
 
 
 def generate_code():
     time_str = datetime.now().strftime("%m%d%H%M%S")
     return time_str
+
+
+# Module-level variable to store experiment name (can be set programmatically)
+_current_experiment_name: str | None = None
+
+
+def set_experiment_name(name: str | None):
+    """Set the experiment name for organizing results."""
+    global _current_experiment_name
+    _current_experiment_name = name
+
+
+def get_experiment_name() -> str | None:
+    """Get the current experiment name (from programmatic setting or environment variable)."""
+    return _current_experiment_name or EXPERIMENT_NAME
 
 
 class Session:
@@ -17,6 +32,7 @@ class Session:
 
     def init_session(self):
         self.session_id = generate_code()
+        self.experiment_name = get_experiment_name()
         os.makedirs(f"{BASE_DIR}/runtime", exist_ok=True)
 
     def load_running_session(self):
@@ -29,6 +45,13 @@ class Session:
         with open(f"{BASE_DIR}/runtime/current_session.json", "w") as f:
             f.write(json.dumps(session_dict, indent=4))
 
+    def _build_session_dir(self) -> str:
+        """Build the session directory path based on experiment name and root cause."""
+        if hasattr(self, "experiment_name") and self.experiment_name:
+            return f"{RESULTS_DIR}/{self.experiment_name}/{self.root_cause_name}/{self.session_id}"
+        else:
+            return f"{RESULTS_DIR}/{self.root_cause_name}/{self.session_id}"
+
     def update_session(self, key: str, value: str):
         setattr(self, key, value)
         if hasattr(self, "problem_names") and hasattr(self, "session_id"):
@@ -36,7 +59,7 @@ class Session:
                 self.root_cause_name = "multiple_faults"
             else:
                 self.root_cause_name = self.problem_names[0]
-                self.session_dir = f"{RESULTS_DIR}/{self.root_cause_name}/{self.session_id}"
+            self.session_dir = self._build_session_dir()
         self._write_session()
 
     def write_gt(self, gt: str):

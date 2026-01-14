@@ -52,5 +52,6 @@ class MCPServerConfig:
                 "LAB_NAME": self.session.scenario_name,
                 "backend_model": self.session.backend_model,
                 "agent_type": self.session.agent_type,
+                "SESSION_DIR": self.session.session_dir,  # Pass the full session directory path
             }
         return config

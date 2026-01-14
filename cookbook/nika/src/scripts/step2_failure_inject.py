@@ -8,9 +8,15 @@ from nika.utils.logger import system_logger
 from nika.utils.session import Session
 
 
-def inject_failure(problem_names: list[str], re_inject: bool = True):
+def inject_failure(problem_names: list[str], re_inject: bool = True, seed: int | None = None):
     """
     Inject failure into the network environment based on the root cause name.
+    
+    Args:
+        problem_names: List of problem names to inject.
+        re_inject: Whether to re-inject the fault.
+        seed: Optional seed for random fault injection. If None, uses session_id[-4:].
+              Use the same seed across experiments for reproducible comparisons.
     """
     logger = system_logger
 
@@ -26,9 +32,20 @@ def inject_failure(problem_names: list[str], re_inject: bool = True):
 
     scenario_params = session.scenario_params if hasattr(session, "scenario_params") else {}
 
+    # Determine the seed to use
+    if seed is not None:
+        actual_seed = seed
+        logger.info(f"Using user-specified seed: {seed}")
+    else:
+        actual_seed = session.session_id[-4:]
+        logger.info(f"Using session-based seed: {actual_seed}")
+    
+    # Save seed to session for reproducibility tracking
+    session.update_session("random_seed", actual_seed)
+
     tot_tasks = []
     for task_level in TaskLevel:
-        random.seed(session.session_id[-4:])
+        random.seed(actual_seed)
         problem = get_problem_instance(
             problem_names=problem_names, task_level=task_level, scenario_name=session.scenario_name, **scenario_params
         )
@@ -61,6 +78,12 @@ if __name__ == "__main__":
         default="frr_service_down",
         help="The issue to inject, e.g. frr_service_down, bmv2_service_down, etc.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional seed for reproducible fault injection. Use the same seed across experiments for fair comparison.",
+    )
     args = parser.parse_args()
 
-    inject_failure(problem_names=[args.problem])
+    inject_failure(problem_names=[args.problem], seed=args.seed)

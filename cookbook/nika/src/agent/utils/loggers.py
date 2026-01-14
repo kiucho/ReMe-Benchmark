@@ -26,13 +26,17 @@ class FileLoggerHandler(BaseCallbackHandler):
         with open(f"{BASE_DIR}/runtime/current_session.json", "r") as f:
             session_info = json.load(f)
 
-        log_path = os.path.join(
-            BASE_DIR,
-            "results",
+        # Build path with optional experiment_name
+        path_parts = [BASE_DIR, "results"]
+        experiment_name = session_info.get("experiment_name")
+        if experiment_name:
+            path_parts.append(experiment_name)
+        path_parts.extend([
             session_info["root_cause_name"],
             session_info["session_id"],
             f"conversation_{name}.log",
-        )
+        ])
+        log_path = os.path.join(*path_parts)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
         # new loggers
