@@ -52,7 +52,10 @@ def record_eval_result(eval_result: EvalResult) -> None:
 
     log_file_path = os.path.join(log_results_dir, "evaluation_summary.csv")
 
-    data = asdict(eval_result)
+    data = {
+        "exp_name": experiment_name,
+        **asdict(eval_result),
+    }
 
     file_exists = os.path.exists(log_file_path)
 

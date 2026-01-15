@@ -438,21 +438,29 @@ class BasicReActAgent:
         """Convert message history to trajectory format for memory storage."""
         # Remove the injected experience from the task description
         cleaned_messages = []
+        query = ""
         for msg in messages:
             if hasattr(msg, "content"):
                 content = self._normalize_content(msg.content)
                 # Remove injected experience section
                 pattern = r"\n\nSome Related Experience to help you complete the task:.*"
                 content = re.sub(pattern, "", content, flags=re.DOTALL)
-                cleaned_messages.append({"role": self._normalize_role(msg.type), "content": content})
+                role = self._normalize_role(msg.type)
+                cleaned_messages.append({"role": role, "content": content})
+                if not query and role == "user":
+                    query = content
             elif isinstance(msg, dict):
                 content = self._normalize_content(msg.get("content", ""))
                 pattern = r"\n\nSome Related Experience to help you complete the task:.*"
                 content = re.sub(pattern, "", content, flags=re.DOTALL)
-                cleaned_messages.append({"role": self._normalize_role(msg.get("role", "user")), "content": content})
+                role = self._normalize_role(msg.get("role", "user"))
+                cleaned_messages.append({"role": role, "content": content})
+                if not query and role == "user":
+                    query = content
 
         return {
             "task_id": task_id,
             "messages": cleaned_messages,
             "score": score,
+            "metadata": {"query": query},
         }
