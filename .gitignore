@@ -24,6 +24,10 @@ build/*
 cookbook/appworld/data/*
 cookbook/appworld/experiments/*
 cookbook/appworld/exp_result/*
+cookbook/appworld/demo_results/*
+cookbook/appworld/results/*
+cookbook/nika/results/*
+cookbook/nika/runtime/*
 file_vector_store/*
 cookbook/appworld/file_vector_store/*
 /.venv/

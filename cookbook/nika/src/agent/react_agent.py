@@ -187,9 +187,10 @@ class BasicReActAgent:
                 memory_debug_info["previous_memories"] = previous_memories
                 formatted_memories = []
                 for i, memory in enumerate(previous_memories, 1):
-                    condition = memory.get("when_to_use", "")
+                    # condition = memory.get("when_to_use", "")
                     memory_content = memory.get("content", "")
-                    memory_text = f"Experience {i}:\n  When to use: {condition}\n  Content: {memory_content}\n"
+                    # memory_text = f"Experience {i}:\n  When to use: {condition}\n  Content: {memory_content}\n"
+                    memory_text = f"{memory_content}\n"
                     formatted_memories.append(memory_text)
                 enriched_task_description = (
                     task_description

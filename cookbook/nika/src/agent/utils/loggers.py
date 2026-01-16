@@ -9,7 +9,7 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages import BaseMessage, ToolMessage
 from langchain_core.outputs.generation import Generation
 
-from nika.config import BASE_DIR
+from nika.config import BASE_DIR, RESULTS_DIR
 
 
 class FileLoggerHandler(BaseCallbackHandler):
@@ -26,17 +26,23 @@ class FileLoggerHandler(BaseCallbackHandler):
         with open(f"{BASE_DIR}/runtime/current_session.json", "r") as f:
             session_info = json.load(f)
 
-        # Build path with optional experiment_name
-        path_parts = [BASE_DIR, "results"]
-        experiment_name = session_info.get("experiment_name")
-        if experiment_name:
-            path_parts.append(experiment_name)
-        path_parts.extend([
-            session_info["root_cause_name"],
-            session_info["session_id"],
-            f"conversation_{name}.log",
-        ])
-        log_path = os.path.join(*path_parts)
+        session_dir = session_info.get("session_dir")
+        if session_dir:
+            log_path = os.path.join(session_dir, f"conversation_{name}.log")
+        else:
+            # Fallback for older sessions without a stored session_dir.
+            path_parts = [RESULTS_DIR]
+            experiment_name = session_info.get("experiment_name")
+            if experiment_name:
+                path_parts.append(experiment_name)
+            path_parts.extend(
+                [
+                    session_info["root_cause_name"],
+                    session_info["session_id"],
+                    f"conversation_{name}.log",
+                ]
+            )
+            log_path = os.path.join(*path_parts)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
         # new loggers

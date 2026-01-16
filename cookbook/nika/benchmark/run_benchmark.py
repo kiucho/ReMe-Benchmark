@@ -87,6 +87,34 @@ def load_memory(workspace_id: str, path: str = "docs/library", api_url: str = "h
         print(f"Memory loaded from {path}")
 
 
+def rewrite_failure_trajectory(
+    workspace_id: str,
+    trajectory: dict,
+    query: str | None,
+    api_url: str = "http://0.0.0.0:8002/",
+) -> dict | None:
+    """Rewrite failure memories using the summary_task_memory_rewrite flow."""
+    resolved_query = query
+    if not resolved_query:
+        resolved_query = trajectory.get("metadata", {}).get("query", "")
+    if not resolved_query:
+        messages = trajectory.get("messages", [])
+        if messages:
+            resolved_query = messages[0].get("content", "")
+    if not resolved_query:
+        return None
+
+    response = requests.post(
+        url=f"{api_url}summary_task_memory_rewrite",
+        json={
+            "workspace_id": workspace_id,
+            "trajectories": [trajectory],
+            "query": resolved_query,
+        },
+    )
+    return handle_api_response(response)
+
+
 def get_all_scores_from_session(session_dir: str) -> tuple[float, float, float]:
     """Get Detection score, Localization F1, and RCA F1 by comparing submission with ground truth."""
     try:
@@ -245,15 +273,22 @@ def run_benchmark(
 
             if agent:
                 if experiment_name:
-                    session_dir = f"{RESULTS_DIR}/{experiment_name}/{problem}"
+                    session_dir = os.path.join(RESULTS_DIR, experiment_name, problem, scenario)
                 else:
-                    session_dir = f"{RESULTS_DIR}/{problem}"
+                    session_dir = os.path.join(RESULTS_DIR, problem, scenario)
                 if os.path.exists(session_dir):
                     session_dirs = [
                         os.path.join(session_dir, d)
                         for d in os.listdir(session_dir)
                         if os.path.isdir(os.path.join(session_dir, d))
                     ]
+                    if topo_size:
+                        topo_prefix = f"{topo_size}-"
+                        session_dirs = [
+                            candidate_dir
+                            for candidate_dir in session_dirs
+                            if os.path.basename(candidate_dir).startswith(topo_prefix)
+                        ]
                     if session_dirs:
                         latest_session_dir = str(max(session_dirs, key=os.path.getmtime))
                         detection_score, loc_f1, rca_f1 = get_all_scores_from_session(latest_session_dir)
@@ -275,6 +310,29 @@ def run_benchmark(
                                 score=combined_score,
                             )
 
+                            rewritten_context = ""
+                            rewrite_metadata = {}
+                            if not is_perfect and new_memories:
+                                trajectory = memory_extraction_info.get("trajectory")
+                                query = None
+                                if isinstance(trajectory, dict):
+                                    query = trajectory.get("metadata", {}).get("query")
+                                if trajectory:
+                                    rewrite_result = rewrite_failure_trajectory(
+                                        workspace_id=memory_workspace_id,
+                                        trajectory=trajectory,
+                                        query=query,
+                                        api_url=memory_base_url,
+                                    )
+                                    if rewrite_result:
+                                        rewritten_context = rewrite_result.get("answer", "")
+                                        rewrite_metadata = rewrite_result.get("metadata", {})
+                            if rewritten_context:
+                                memory_extraction_info["rewrite"] = {
+                                    "rewritten_context": rewritten_context,
+                                    "metadata": rewrite_metadata,
+                                }
+
                             # Save memory extraction info to session directory
                             memory_extraction_path = os.path.join(latest_session_dir, "memory_extraction.json")
                             with open(memory_extraction_path, "w") as f:
@@ -282,8 +340,16 @@ def run_benchmark(
                             print(f"  Memory extraction info saved to {memory_extraction_path}")
 
                             if not is_perfect and new_memories:
-                                # Failed: use these memories for next retry
-                                previous_memories = new_memories
+                                # Failed: use rewritten context for next retry when available
+                                if rewritten_context:
+                                    previous_memories = [
+                                        {
+                                            # "when_to_use": "Retry the same task after failure reflection",
+                                            "content": rewritten_context,
+                                        }
+                                    ]
+                                else:
+                                    previous_memories = new_memories
                             else:
                                 # Success or no memories: clear previous_memories
                                 previous_memories = []

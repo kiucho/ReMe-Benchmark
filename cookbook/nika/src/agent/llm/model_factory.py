@@ -10,7 +10,7 @@ load_dotenv()
 
 
 def _get_reasoning_model_kwargs() -> dict:
-    return {"reasoning_effort": "medium"}
+    return {"reasoning_effort": "high"}
 
 
 def load_model(backend_model: str = "gpt-oss:20b") -> BaseChatModel:
@@ -40,7 +40,7 @@ def load_model(backend_model: str = "gpt-oss:20b") -> BaseChatModel:
             api_key=os.getenv("AZURE_LLM_API_KEY") or os.getenv("AZURE_API_KEY"),
             azure_endpoint=os.getenv("AZURE_LLM_API_BASE") or os.getenv("AZURE_API_BASE"),
             api_version=os.getenv("AZURE_LLM_API_VERSION") or os.getenv("AZURE_API_VERSION") or "2024-02-01",
-            temperature=0,
+            temperature=1,
             timeout=180,  # 3 minutes timeout
             max_retries=2,  # Retry up to 2 times on failure
             # model_kwargs=model_kwargs,

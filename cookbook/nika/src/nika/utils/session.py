@@ -46,11 +46,21 @@ class Session:
             f.write(json.dumps(session_dict, indent=4))
 
     def _build_session_dir(self) -> str:
-        """Build the session directory path based on experiment name and root cause."""
-        if hasattr(self, "experiment_name") and self.experiment_name:
-            return f"{RESULTS_DIR}/{self.experiment_name}/{self.root_cause_name}/{self.session_id}"
-        else:
-            return f"{RESULTS_DIR}/{self.root_cause_name}/{self.session_id}"
+        """Build the session directory path based on experiment, root cause, scenario, and topo size."""
+        experiment_name = self.experiment_name if hasattr(self, "experiment_name") else None
+        scenario_name = self.scenario_name if hasattr(self, "scenario_name") else None
+        topo_size = self.scenario_topo_size if hasattr(self, "scenario_topo_size") else None
+
+        if scenario_name:
+            topo_label = str(topo_size) if topo_size else "na"
+            session_leaf = f"{topo_label}-{self.session_id}"
+            if experiment_name:
+                return f"{RESULTS_DIR}/{experiment_name}/{self.root_cause_name}/{scenario_name}/{session_leaf}"
+            return f"{RESULTS_DIR}/{self.root_cause_name}/{scenario_name}/{session_leaf}"
+
+        if experiment_name:
+            return f"{RESULTS_DIR}/{experiment_name}/{self.root_cause_name}/{self.session_id}"
+        return f"{RESULTS_DIR}/{self.root_cause_name}/{self.session_id}"
 
     def update_session(self, key: str, value: str):
         setattr(self, key, value)

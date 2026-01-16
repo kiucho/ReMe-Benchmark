@@ -30,6 +30,19 @@ flow:
         type: array
         description: "A list of conversation trajectory information, including message content and score. This field does not need to be filled in, the system will complete it automatically."
         required: false
+  
+  summary_task_memory_rewrite:
+    flow_content: TrajectoryPreprocessOp(success_threshold=1.0) >> (SuccessExtractionOp()|FailureExtractionOp()|ComparativeExtractionOp(enable_soft_comparison=True)) >> MemoryValidationOp(validation_threshold=0.5) >> MemoryDeduplicationOp() >> RewriteMemoryOp(enable_llm_rewrite=True)
+    description: "Summarizes trajectories, validates/deduplicates memories, then rewrites them for the current query context"
+    input_schema:
+      trajectories:
+        type: array
+        description: "A list of conversation trajectory information, including message content and score. This field does not need to be filled in, the system will complete it automatically."
+        required: false
+      query:
+        type: string
+        description: "user query"
+        required: true
 
   retrieve_task_memory_simple:
     flow_content: BuildQueryOp() >> RecallVectorStoreOp() >> MergeMemoryOp()
