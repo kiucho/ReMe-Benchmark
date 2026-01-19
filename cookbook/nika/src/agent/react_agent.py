@@ -261,7 +261,9 @@ class BasicReActAgent:
             return [], {}
 
         trajectory = self.get_traj_from_messages(task_id, task_history, score)
-        new_memories, metadata = self.add_memory([trajectory])
+        use_rewrite = score != 1.0
+        query = trajectory.get("metadata", {}).get("query")
+        new_memories, metadata = self.add_memory([trajectory], query=query, rewrite=use_rewrite)
 
         memory_extraction_info = {
             "score": score,
@@ -272,6 +274,13 @@ class BasicReActAgent:
             "num_before_dedup": len(metadata.get("memory_list_before_dedup", [])),
             "num_after_dedup": len(new_memories),
         }
+        rewritten_context = metadata.get("rewritten_context", "")
+        if rewritten_context:
+            rewrite_metadata = {k: v for k, v in metadata.items() if k != "rewritten_context"}
+            memory_extraction_info["rewrite"] = {
+                "rewritten_context": rewritten_context,
+                "metadata": rewrite_metadata,
+            }
 
         # If task failed, delete the newly created memories (for retry use)
         if score != 1.0 and new_memories:
@@ -360,26 +369,50 @@ class BasicReActAgent:
             system_logger.error(f"Failed to retrieve memory: {e}")
             return None
 
-    def add_memory(self, trajectories: list) -> tuple[list, dict]:
+    def add_memory(self, trajectories: list, query: str | None = None, rewrite: bool = False) -> tuple[list, dict]:
         """Generate a summary of conversation messages and create task memories.
-        
+
+        Args:
+            trajectories: Trajectory list to summarize.
+            query: Optional query used for rewrite flow.
+            rewrite: When true, uses summary_task_memory_rewrite.
+
         Returns:
             Tuple of (memory_list, metadata) where metadata contains
             both 'memory_list' (after dedup) and 'memory_list_before_dedup'.
         """
         try:
+            endpoint = "summary_task_memory_rewrite" if rewrite else "summary_task_memory"
+            payload = {
+                "workspace_id": self.memory_workspace_id,
+                "trajectories": trajectories,
+            }
+            if rewrite:
+                resolved_query = query
+                if not resolved_query and trajectories:
+                    trajectory = trajectories[0] if isinstance(trajectories[0], dict) else {}
+                    resolved_query = trajectory.get("metadata", {}).get("query", "")
+                    if not resolved_query:
+                        messages = trajectory.get("messages", [])
+                        if messages:
+                            resolved_query = messages[0].get("content", "")
+                if not resolved_query:
+                    system_logger.error("Missing query for summary_task_memory_rewrite")
+                    return [], {}
+                payload["query"] = resolved_query
+
             response = requests.post(
-                url=f"{self.memory_base_url}summary_task_memory",
-                json={
-                    "workspace_id": self.memory_workspace_id,
-                    "trajectories": trajectories,
-                },
+                url=f"{self.memory_base_url}{endpoint}",
+                json=payload,
             )
             result = self.handle_api_response(response)
             if not result:
                 return [], {}
 
-            metadata = result.get("metadata", {})
+            metadata = result.get("metadata", {}) or {}
+            if rewrite:
+                metadata = dict(metadata)
+                metadata["rewritten_context"] = result.get("answer", "")
             memory_list = metadata.get("memory_list", [])
             system_logger.info(f"Task memory created: {len(memory_list)} memories")
             return memory_list, metadata
