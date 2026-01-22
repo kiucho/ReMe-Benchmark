@@ -7,7 +7,7 @@ venv/
 __pycache__
 *.log
 tmp*
-temp*
+temp/
 private*
 dist/
 nohup*
