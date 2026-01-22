@@ -67,7 +67,7 @@ def generic_eval(gt, submission):
     )
 
 
-def _eval_problem(session: Session, judge_model: str):
+def _eval_problem(session: Session, judge_model: str) -> EvalResult:
     """Evaluate the problem solution and log the results."""
     gt = f"{session.session_dir}/ground_truth.json"
     gt = json.loads(open(gt, "r").read())
@@ -162,23 +162,26 @@ def _eval_problem(session: Session, judge_model: str):
         rca_f1=rca_f1,
     )
 
-    record_eval_result(eval_result)
+    return eval_result
 
 
-def eval_results(judge_model, destroy_env=True):
+def eval_results(judge_model, destroy_env: bool = True, *, record_summary: bool = True) -> EvalResult:
     """
     Destroy the network environment associated with the current session.
     """
     session = Session()
     session.load_running_session()
 
-    _eval_problem(session, judge_model)
+    eval_result = _eval_problem(session, judge_model)
+    if record_summary:
+        record_eval_result(eval_result)
     net_env = get_net_env_instance(session.scenario_name)
     if destroy_env and net_env.lab_exists():
         net_env.undeploy()
     logger.info(f"Destroyed network environment: {session.scenario_name} with session ID: {session.session_id}")
     session.clear_session()
     assert not os.path.exists(f"{BASE_DIR}/runtime/current_session.json")
+    return eval_result
 
 
 if __name__ == "__main__":

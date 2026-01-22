@@ -40,6 +40,8 @@ class EvalResult:
     rca_precision: float = None
     rca_recall: float = None
     rca_f1: float = None
+    experience_added_count: int = None
+    experience_pool_total_count: int = None
 
 
 def record_eval_result(eval_result: EvalResult) -> None:
@@ -57,10 +59,31 @@ def record_eval_result(eval_result: EvalResult) -> None:
         **asdict(eval_result),
     }
 
-    file_exists = os.path.exists(log_file_path)
+    desired_fieldnames = list(data.keys())
 
+    if os.path.exists(log_file_path):
+        with open(log_file_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            existing_fieldnames = list(reader.fieldnames or [])
+            existing_rows = list(reader)
+
+        if existing_fieldnames != desired_fieldnames:
+            merged_fieldnames = []
+            for key in existing_fieldnames + desired_fieldnames:
+                if key not in merged_fieldnames:
+                    merged_fieldnames.append(key)
+
+            with open(log_file_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=merged_fieldnames)
+                writer.writeheader()
+                for row in existing_rows:
+                    writer.writerow(row)
+
+            desired_fieldnames = merged_fieldnames
+
+    file_exists = os.path.exists(log_file_path)
     with open(log_file_path, "a+", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=data.keys())
-        if not file_exists:
+        writer = csv.DictWriter(f, fieldnames=desired_fieldnames)
+        if not file_exists or os.path.getsize(log_file_path) == 0:
             writer.writeheader()
         writer.writerow(data)

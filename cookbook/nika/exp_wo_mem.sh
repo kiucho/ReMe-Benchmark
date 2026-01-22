@@ -7,6 +7,7 @@ SEED=42
 BENCHMARK_FILE=benchmark_custom.csv
 
 python benchmark/run_benchmark.py \
+    --mode online \
     --num-trials=$NUM_TRIALS \
     --experiment-name=$EXPERIMENT_NAME \
     --seed=$SEED \

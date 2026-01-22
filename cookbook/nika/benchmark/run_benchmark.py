@@ -9,6 +9,7 @@ import requests
 from tqdm import tqdm
 
 from nika.config import RESULTS_DIR
+from nika.evaluator.result_log import record_eval_result
 from nika.net_env.net_env_pool import get_net_env_instance
 from nika.orchestrator.tasks.detection import DetectionSubmission
 from nika.orchestrator.tasks.localization import LocalizationTask
@@ -20,6 +21,7 @@ from scripts.step3_agent_run import start_agent
 from scripts.step4_result_eval import eval_results
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_EXPERIENCE_POOL_DIR = os.path.join(os.path.dirname(cur_dir), "experience_pool")
 CASE_LOG_FIELDS = [
     "timestamp",
     "problem",
@@ -121,6 +123,25 @@ def load_memory(workspace_id: str, path: str = "docs/library", api_url: str = "h
         print(f"Memory loaded from {path}")
 
 
+def count_memories(workspace_id: str, api_url: str = "http://0.0.0.0:8002/") -> int | None:
+    """Count the number of memories in the vector store workspace."""
+    response = requests.post(
+        url=f"{api_url}vector_store",
+        json={
+            "workspace_id": workspace_id,
+            "action": "count",
+        },
+    )
+    result = handle_api_response(response)
+    if not result:
+        return None
+    action_result = (result.get("metadata", {}) or {}).get("action_result", None)
+    try:
+        return int(action_result)
+    except Exception:
+        return None
+
+
 def get_all_scores_from_session(session_dir: str) -> tuple[float, float, float]:
     """Get Detection score, Localization accuracy, and RCA accuracy by comparing submission with ground truth."""
     try:
@@ -190,6 +211,7 @@ def run_benchmark(
     backend_model: str = "gpt-5-mini",
     max_steps: int = 40,
     judge_model: str = "qwen3:32b",
+    mode: str = "online",
     use_memory: bool = False,
     use_memory_addition: bool = False,
     use_memory_deletion: bool = False,
@@ -201,6 +223,9 @@ def run_benchmark(
     num_trials: int = 1,
     experiment_name: str | None = None,
     seed: int | None = None,
+    temperature: float | None = None,
+    num_samples: int = 8,
+    experience_pool_dir: str | None = None,
 ):
     """Run benchmark tests based on the benchmark.csv file.
 
@@ -214,17 +239,33 @@ def run_benchmark(
     """
     # Set experiment name for session directory organization
     set_experiment_name(experiment_name)
+
+    build_offline_pool = mode == "offline"
+    if build_offline_pool:
+        use_memory = True
+        use_memory_addition = True
+        use_memory_deletion = False
     
+    if experience_pool_dir is None:
+        experience_pool_dir = DEFAULT_EXPERIENCE_POOL_DIR
+
     benchmark_file = os.path.join(cur_dir, benchmark_file_name)
     df = pl.read_csv(benchmark_file)
     case_log_path = init_benchmark_case_log(experiment_name)
 
     print(f"Running benchmark with memory={'enabled' if use_memory else 'disabled'}")
-    print(f"Backend model: {backend_model}, Max steps: {max_steps}, Num trials: {num_trials}")
+    if build_offline_pool:
+        print(f"Backend model: {backend_model}, Max steps: {max_steps}, Num samples: {num_samples}")
+    else:
+        print(f"Backend model: {backend_model}, Max steps: {max_steps}, Num trials: {num_trials}")
     if experiment_name:
         print(f"Experiment name: {experiment_name} (results will be saved to results/{experiment_name}/...)")
     if seed is not None:
         print(f"Using fixed seed: {seed} (for reproducible fault injection)")
+    if build_offline_pool:
+        print("Offline pool build mode: memory retrieval disabled, failure experiences retained")
+        print(f"Experience pool dir: {experience_pool_dir}")
+        print(f"Sampling temperature: {temperature}")
 
     total_tasks = len(df)
     pbar = tqdm(df.iter_rows(named=True), total=total_tasks, desc="Benchmark Progress")
@@ -240,7 +281,10 @@ def run_benchmark(
         error_type = ""
         error_message = ""
         completed_trials = 0
+        total_trials = num_samples if build_offline_pool else num_trials
         stage = ""
+        last_eval_result = None
+        last_eval_result_recorded = False
 
         # Track previous memories for retry logic
         previous_memories: list = []
@@ -248,11 +292,14 @@ def run_benchmark(
         final_loc_acc = 0.0
         final_rca_acc = 0.0
         final_llm_judge_score = 0.0
+        sampled_trajectories: list[dict] = []
 
         try:
-            # Run multiple trials if num_trials > 1
-            for trial_id in range(num_trials):
-                pbar.set_postfix(trial=f"{trial_id + 1}/{num_trials}")
+            enable_retry = (not build_offline_pool) and num_trials > 1
+
+            # Run multiple trials if num_trials > 1, or N samples in offline pool mode
+            for trial_id in range(total_trials):
+                pbar.set_postfix(trial=f"{trial_id + 1}/{total_trials}")
 
                 # Step 0: Wipe Kathara to ensure clean state (prevents contamination from previous runs)
                 stage = "wipe_kathara"
@@ -279,12 +326,16 @@ def run_benchmark(
                     utility_threshold=utility_threshold,
                     memory_base_url=memory_base_url,
                     memory_workspace_id=memory_workspace_id,
-                    previous_memories=previous_memories if trial_id > 0 else None,
+                    previous_memories=previous_memories if (enable_retry and trial_id > 0) else None,
+                    temperature=temperature,
+                    use_memory_retrieval=use_memory and (not build_offline_pool),
+                    enable_memory_store=use_memory_addition or build_offline_pool,
                 )
 
                 # Step 4: Evaluate Results
                 stage = "eval_results"
-                eval_results(judge_model=judge_model, destroy_env=False)
+                last_eval_result_recorded = False
+                last_eval_result = eval_results(judge_model=judge_model, destroy_env=False, record_summary=False)
 
                 # Step 5: Get score and handle memory operations
                 stage = "score_results"
@@ -327,7 +378,8 @@ def run_benchmark(
                             is_perfect = detection_score == 1.0 and loc_acc == 1.0 and rca_acc == 1.0
 
                             # Memory addition logic (for num_trials retry)
-                            if use_memory and use_memory_addition:
+                            if use_memory and use_memory_addition and not build_offline_pool:
+                                pool_count_before = count_memories(memory_workspace_id, api_url=memory_base_url)
                                 # Pass 1.0 if perfect, else 0.0 (simplification for memory utility)
                                 combined_score = 1.0 if is_perfect else 0.0
                                 task_history = getattr(agent, "task_history", []) or []
@@ -336,30 +388,56 @@ def run_benchmark(
                                     task_id=problem,
                                     task_history=task_history,
                                     score=combined_score,
+                                    keep_failure_memories=build_offline_pool,
+                                    rewrite_on_failure=not build_offline_pool,
                                 )
+
+                                pool_count_after_add = count_memories(memory_workspace_id, api_url=memory_base_url)
+                                memory_extraction_info["experience_pool_count_before"] = pool_count_before
+                                memory_extraction_info["experience_pool_count_after_add"] = pool_count_after_add
+                                if pool_count_before is not None and pool_count_after_add is not None:
+                                    memory_extraction_info["experience_pool_delta_add"] = (
+                                        pool_count_after_add - pool_count_before
+                                    )
 
                                 # Save memory extraction info to session directory
                                 memory_extraction_path = os.path.join(latest_session_dir, "memory_extraction.json")
                                 with open(memory_extraction_path, "w") as f:
                                     json.dump(memory_extraction_info, f, indent=2, ensure_ascii=False, default=str)
                                 print(f"  Memory extraction info saved to {memory_extraction_path}")
+                                if pool_count_before is not None and pool_count_after_add is not None:
+                                    print(
+                                        "  Experience pool (add): "
+                                        f"before={pool_count_before}, after={pool_count_after_add}, "
+                                        f"delta={pool_count_after_add - pool_count_before}"
+                                    )
 
-                                if not is_perfect and new_memories:
-                                    # Failed: use rewritten context for next retry when available
-                                    rewrite_info = memory_extraction_info.get("rewrite", {})
-                                    rewritten_context = rewrite_info.get("rewritten_context", "")
-                                    if rewritten_context:
-                                        previous_memories = [
-                                            {
-                                                # "when_to_use": "Retry the same task after failure reflection",
-                                                "content": rewritten_context,
-                                            }
-                                        ]
+                                if enable_retry:
+                                    if not is_perfect and new_memories:
+                                        # Failed: use rewritten context for next retry when available
+                                        rewrite_info = memory_extraction_info.get("rewrite", {})
+                                        rewritten_context = rewrite_info.get("rewritten_context", "")
+                                        if rewritten_context:
+                                            previous_memories = [
+                                                {
+                                                    # "when_to_use": "Retry the same task after failure reflection",
+                                                    "content": rewritten_context,
+                                                }
+                                            ]
+                                        else:
+                                            previous_memories = new_memories
                                     else:
-                                        previous_memories = new_memories
-                                else:
-                                    # Success or no memories: clear previous_memories
-                                    previous_memories = []
+                                        # Success or no memories: clear previous_memories
+                                        previous_memories = []
+                            elif build_offline_pool and agent:
+                                combined_score = 1.0 if is_perfect else 0.0
+                                task_history = getattr(agent, "task_history", []) or []
+                                trajectory = agent.get_traj_from_messages(
+                                    task_id=problem,
+                                    messages=task_history,
+                                    score=combined_score,
+                                )
+                                sampled_trajectories.append(trajectory)
 
                             # Update memory usage information
                             if use_memory and agent.retrieved_memory_list:
@@ -372,6 +450,28 @@ def run_benchmark(
                             if use_memory and use_memory_deletion:
                                 agent.delete_memory()
 
+                            # Record evaluation summary row (with memory pool stats when available)
+                            if last_eval_result and not last_eval_result_recorded:
+                                added_count = 0
+                                if use_memory and use_memory_addition and not build_offline_pool:
+                                    action = memory_extraction_info.get("action", "")
+                                    if action != "deleted_for_retry":
+                                        added_count = len(new_memories)
+                                pool_total_count = (
+                                    count_memories(memory_workspace_id, api_url=memory_base_url) if use_memory else None
+                                )
+                                last_eval_result.experience_added_count = added_count
+                                last_eval_result.experience_pool_total_count = pool_total_count
+                                record_eval_result(last_eval_result)
+                                last_eval_result_recorded = True
+
+                if last_eval_result and not last_eval_result_recorded:
+                    pool_total_count = count_memories(memory_workspace_id, api_url=memory_base_url) if use_memory else None
+                    last_eval_result.experience_added_count = 0
+                    last_eval_result.experience_pool_total_count = pool_total_count
+                    record_eval_result(last_eval_result)
+                    last_eval_result_recorded = True
+
                 final_detection_score = detection_score
                 final_loc_acc = loc_acc
                 final_rca_acc = rca_acc
@@ -379,10 +479,43 @@ def run_benchmark(
                 completed_trials = trial_id + 1
 
                 # Success: stop retrying
-                if is_perfect:
+                if is_perfect and not build_offline_pool:
                     print(f"  Task succeeded on trial {trial_id + 1}")
                     break
+
+            if build_offline_pool and sampled_trajectories and agent:
+                print(f"  Building experience pool from {len(sampled_trajectories)} trajectories")
+                pool_count_before = count_memories(memory_workspace_id, api_url=memory_base_url)
+                new_memories, metadata = agent.add_memory(sampled_trajectories, rewrite=False)
+                pool_count_after = count_memories(memory_workspace_id, api_url=memory_base_url)
+                metadata = dict(metadata or {})
+                metadata["experience_pool_count_before"] = pool_count_before
+                metadata["experience_pool_count_after"] = pool_count_after
+                if pool_count_before is not None and pool_count_after is not None:
+                    metadata["experience_pool_delta"] = pool_count_after - pool_count_before
+                if new_memories:
+                    print(f"  Added {len(new_memories)} memories to pool")
+                if pool_count_before is not None and pool_count_after is not None:
+                    print(
+                        "  Experience pool (offline build): "
+                        f"before={pool_count_before}, after={pool_count_after}, "
+                        f"delta={pool_count_after - pool_count_before}"
+                    )
+                if experiment_name:
+                    pool_log_dir = os.path.join(RESULTS_DIR, experiment_name, problem, scenario)
+                else:
+                    pool_log_dir = os.path.join(RESULTS_DIR, problem, scenario)
+                os.makedirs(pool_log_dir, exist_ok=True)
+                pool_metadata_path = os.path.join(pool_log_dir, "memory_extraction_batch.json")
+                with open(pool_metadata_path, "w") as f:
+                    json.dump(metadata, f, indent=2, ensure_ascii=False, default=str)
         except Exception as e:
+            if last_eval_result and not last_eval_result_recorded:
+                try:
+                    record_eval_result(last_eval_result)
+                    last_eval_result_recorded = True
+                except Exception:
+                    pass
             case_status = "failed"
             error_stage = stage or "unknown"
             error_type = type(e).__name__
@@ -398,7 +531,10 @@ def run_benchmark(
 
                 # Dump memory after each task to prevent data loss on interruption
                 if use_memory:
-                    if experiment_name:
+                    if build_offline_pool:
+                        dump_path = os.path.join(experience_pool_dir, memory_workspace_id)
+                        os.makedirs(dump_path, exist_ok=True)
+                    elif experiment_name:
                         dump_path = f"{RESULTS_DIR}/{experiment_name}/memory_dump_{memory_workspace_id}"
                     else:
                         dump_path = f"{RESULTS_DIR}/memory_dump_{memory_workspace_id}"
@@ -425,7 +561,7 @@ def run_benchmark(
                     "topo_size": topo_size,
                     "status": case_status,
                     "completed_trials": completed_trials,
-                    "num_trials": num_trials,
+                    "num_trials": total_trials,
                     "error_stage": error_stage,
                     "error_type": error_type,
                     "error_message": error_message,
@@ -439,6 +575,13 @@ def run_benchmark(
 
 def main():
     parser = argparse.ArgumentParser(description="Run NIKA benchmark with optional ReMe memory")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["online", "offline"],
+        default="online",
+        help="Run mode: online (benchmark) or offline (experience pool build).",
+    )
     parser.add_argument(
         "--use-memory",
         action="store_true",
@@ -509,6 +652,24 @@ def main():
         help="Number of retry attempts per task (default: 1). Failed attempts generate memories for retries.",
     )
     parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=4,
+        help="Number of samples per task when building offline experience pool (default: 8).",
+    )
+    parser.add_argument(
+        "--experience-pool-dir",
+        type=str,
+        default=None,
+        help="Directory for offline experience pool dumps (default: cookbook/nika/experience_pool).",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="LLM temperature override (default: 0 for online; 0.9 for offline).",
+    )
+    parser.add_argument(
         "--experiment-name",
         type=str,
         default=None,
@@ -517,7 +678,7 @@ def main():
     parser.add_argument(
         "--seed",
         type=int,
-        default=None,
+        default=42,
         help="Optional seed for reproducible fault injection. Use the same seed across experiments (e.g., with/without memory) for fair comparison.",
     )
     parser.add_argument(
@@ -527,33 +688,52 @@ def main():
     )
     args = parser.parse_args()
 
-    # If use-memory is set, automatically enable addition and deletion
-    use_memory_addition = args.use_memory_addition or args.use_memory
+    # Resolve mode and memory flags
+    is_offline = args.mode == "offline"
+    use_memory = args.use_memory or is_offline
+    use_memory_addition = args.use_memory_addition or args.use_memory or is_offline
     use_memory_deletion = args.use_memory_deletion or args.use_memory
+    if is_offline:
+        use_memory_deletion = False
+
+    experience_pool_dir = args.experience_pool_dir or DEFAULT_EXPERIENCE_POOL_DIR
+    temperature = args.temperature
+    if temperature is None:
+        temperature = 0.9 if is_offline else 0.0
 
     # Initialize memory workspace if memory is enabled
-    if args.use_memory:
-        if args.experiment_name:
-            dump_path = f"{RESULTS_DIR}/{args.experiment_name}/memory_dump_{args.memory_workspace_id}"
+    if use_memory:
+        if is_offline:
+            dump_path = os.path.join(experience_pool_dir, args.memory_workspace_id)
+            os.makedirs(dump_path, exist_ok=True)
+            if args.resume_memory:
+                print(f"Resuming from existing experience pool: {dump_path}")
+                load_memory(workspace_id=args.memory_workspace_id, path=dump_path, api_url=args.memory_api_url)
+            else:
+                print("Initializing ReMe memory workspace for offline pool (fresh start)...")
+                delete_workspace(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
+                time.sleep(2)
         else:
-            dump_path = f"{RESULTS_DIR}/memory_dump_{args.memory_workspace_id}"
-        
-        if args.resume_memory:
-            # Resume from existing memory dump
-            print(f"Resuming from existing memory dump: {dump_path}")
-            load_memory(workspace_id=args.memory_workspace_id, path=dump_path, api_url=args.memory_api_url)
-        else:
-            # Fresh start: delete existing workspace
-            print("Initializing ReMe memory workspace (fresh start)...")
-            delete_workspace(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
-            time.sleep(2)
+            if args.experiment_name:
+                dump_path = f"{RESULTS_DIR}/{args.experiment_name}/memory_dump_{args.memory_workspace_id}"
+            else:
+                dump_path = f"{RESULTS_DIR}/memory_dump_{args.memory_workspace_id}"
+            if args.resume_memory:
+                # Resume from existing memory dump
+                print(f"Resuming from existing memory dump: {dump_path}")
+                load_memory(workspace_id=args.memory_workspace_id, path=dump_path, api_url=args.memory_api_url)
+            else:
+                # Fresh start: delete existing workspace
+                print("Initializing ReMe memory workspace (fresh start)...")
+                delete_workspace(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
+                time.sleep(2)
 
     # Run benchmark
     run_benchmark(
         backend_model=args.backend_model,
         max_steps=args.max_steps,
         judge_model=args.judge_model,
-        use_memory=args.use_memory,
+        use_memory=use_memory,
         use_memory_addition=use_memory_addition,
         use_memory_deletion=use_memory_deletion,
         freq_threshold=args.freq_threshold,
@@ -564,11 +744,18 @@ def main():
         num_trials=args.num_trials,
         experiment_name=args.experiment_name,
         seed=args.seed,
+        temperature=temperature,
+        mode=args.mode,
+        num_samples=args.num_samples,
+        experience_pool_dir=experience_pool_dir,
     )
 
     # Optionally dump memories after benchmark (final dump)
-    if args.use_memory:
-        if args.experiment_name:
+    if use_memory:
+        if is_offline:
+            dump_path = os.path.join(experience_pool_dir, args.memory_workspace_id)
+            os.makedirs(dump_path, exist_ok=True)
+        elif args.experiment_name:
             dump_path = f"{RESULTS_DIR}/{args.experiment_name}/memory_dump_{args.memory_workspace_id}"
         else:
             dump_path = f"{RESULTS_DIR}/memory_dump_{args.memory_workspace_id}"

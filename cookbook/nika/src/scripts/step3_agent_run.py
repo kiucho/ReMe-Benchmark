@@ -18,6 +18,9 @@ def _agent_selector(
     utility_threshold: float = 0.5,
     memory_base_url: str = "http://0.0.0.0:8002/",
     memory_workspace_id: str = "nika_v1",
+    temperature: float | None = None,
+    use_memory_retrieval: bool | None = None,
+    enable_memory_store: bool | None = None,
 ):
     match agent_type.lower():
         case "react":
@@ -31,6 +34,9 @@ def _agent_selector(
                 utility_threshold=utility_threshold,
                 memory_base_url=memory_base_url,
                 memory_workspace_id=memory_workspace_id,
+                temperature=temperature,
+                use_memory_retrieval=use_memory_retrieval,
+                enable_memory_store=enable_memory_store,
             )
         case _:
             pass
@@ -48,6 +54,9 @@ def start_agent(
     memory_base_url: str = "http://0.0.0.0:8002/",
     memory_workspace_id: str = "nika_v1",
     previous_memories: list | None = None,
+    temperature: float | None = None,
+    use_memory_retrieval: bool | None = None,
+    enable_memory_store: bool | None = None,
 ) -> BasicReActAgent | None:
     """Start the agent and return the agent instance for post-evaluation memory operations.
 
@@ -74,6 +83,9 @@ def start_agent(
         utility_threshold=utility_threshold,
         memory_base_url=memory_base_url,
         memory_workspace_id=memory_workspace_id,
+        temperature=temperature,
+        use_memory_retrieval=use_memory_retrieval,
+        enable_memory_store=enable_memory_store,
     )
     asyncio.run(agent.run(
         task_description=session.task_description,

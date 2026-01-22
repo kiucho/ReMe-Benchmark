@@ -19,12 +19,12 @@ SUBMIT_PROMPT_TEMPLATE = dedent("""\
 
 
 class SubmissionAgent:
-    def __init__(self, backend_model: str = "gpt-oss:20b"):
+    def __init__(self, backend_model: str = "gpt-oss:20b", temperature: float | None = None):
         mcp_server_config = MCPServerConfig().load_config(if_submit=True)
         self.client = MultiServerMCPClient(connections=mcp_server_config)
         self.tools = None
 
-        self.llm = load_model(backend_model=backend_model)
+        self.llm = load_model(backend_model=backend_model, temperature=temperature)
 
     async def load_tools(self):
         self.tools: list[StructuredTool] = await self.client.get_tools()

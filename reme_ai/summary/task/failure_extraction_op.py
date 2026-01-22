@@ -14,7 +14,12 @@ from loguru import logger
 
 from reme_ai.schema import Message, Trajectory
 from reme_ai.schema.memory import BaseMemory, TaskMemory
-from reme_ai.utils.op_utils import merge_messages_content, parse_json_experience_response, get_trajectory_context
+from reme_ai.utils.op_utils import (
+    merge_messages_content,
+    parse_json_experience_response,
+    get_trajectory_context,
+    build_experience_response_format,
+)
 
 
 @C.register_op()
@@ -79,6 +84,7 @@ class FailureExtractionOp(BaseAsyncOp):
             task_memories = []
 
             for tm_data in task_memories_data:
+                tm_data["extraction_type"] = "failure"
                 task_memory = TaskMemory(
                     workspace_id=self.context.get("workspace_id", ""),
                     when_to_use=tm_data.get("when_to_use", tm_data.get("condition", "")),
@@ -90,7 +96,21 @@ class FailureExtractionOp(BaseAsyncOp):
 
             return task_memories
 
-        return await self.llm.achat(
-            messages=[FlowMessage(role=Role.USER, content=prompt)],
-            callback_fn=parse_task_memories,
+        response_format = build_experience_response_format(
+            name="failure_task_memories",
+            min_items=1,
+            max_items=3,
+            require_tools=True,
         )
+        try:
+            return await self.llm.achat(
+                messages=[FlowMessage(role=Role.USER, content=prompt)],
+                callback_fn=parse_task_memories,
+                response_format=response_format,
+            )
+        except Exception as e:
+            logger.warning(f"Structured output failed, falling back to prompt-only parsing: {e}")
+            return await self.llm.achat(
+                messages=[FlowMessage(role=Role.USER, content=prompt)],
+                callback_fn=parse_task_memories,
+            )

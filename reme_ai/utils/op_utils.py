@@ -60,6 +60,56 @@ def merge_messages_content(messages: List[Message | dict]) -> str:
     return merge_messages_content_flowllm(messages)
 
 
+def build_experience_response_format(
+    name: str,
+    min_items: int = 1,
+    max_items: int = 3,
+    require_tools: bool = True,
+) -> dict:
+    """Build JSON schema response_format for task memory extraction."""
+    required_fields = ["when_to_use", "experience", "tags", "confidence", "step_type"]
+    if require_tools:
+        required_fields.append("tools_used")
+
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "items": {
+                "type": "array",
+                "minItems": min_items,
+                "maxItems": max_items,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "when_to_use": {"type": "string"},
+                        "experience": {"type": "string"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "confidence": {"type": "number"},
+                        "step_type": {
+                            "type": "string",
+                            "enum": ["reasoning", "action", "observation", "decision"],
+                        },
+                        "tools_used": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": required_fields,
+                },
+            }
+        },
+        "required": ["items"],
+    }
+
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": name,
+            "schema": schema,
+            "strict": True,
+        },
+    }
+
+
 def parse_json_experience_response(response: str) -> List[dict]:
     """Parse JSON formatted experience response"""
     try:
@@ -69,6 +119,9 @@ def parse_json_experience_response(response: str) -> List[dict]:
 
         if json_blocks:
             parsed = json.loads(json_blocks[0])
+
+            if isinstance(parsed, dict) and "items" in parsed and isinstance(parsed["items"], list):
+                parsed = parsed["items"]
 
             # Handle array format
             if isinstance(parsed, list):
@@ -91,6 +144,8 @@ def parse_json_experience_response(response: str) -> List[dict]:
 
         # Fallback: try to parse entire response
         parsed = json.loads(response)
+        if isinstance(parsed, dict) and "items" in parsed and isinstance(parsed["items"], list):
+            parsed = parsed["items"]
         if isinstance(parsed, list):
             return parsed
         elif isinstance(parsed, dict):

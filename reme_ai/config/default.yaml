@@ -124,7 +124,7 @@ flow:
         type: string
         description: "vector store operations"
         required: true
-        enum: [ copy, delete, delete_ids, dump, load, list]
+        enum: [ copy, count, delete, delete_ids, dump, load, list]
 
   record_task_memory:
     flow_content: UpdateMemoryFreqOp() >> UpdateMemoryUtilityOp() >> UpdateVectorStoreOp()
@@ -271,10 +271,10 @@ llm:
       # api_base is read from AZURE_LLM_API_BASE environment variable
       # api_version is read from AZURE_LLM_API_VERSION environment variable
       custom_llm_provider: azure
-      temperature: 0.6
+      temperature: 0
     token_count:
       backend: openai
-      model_name: gpt-4o  # Use a similar model for token counting
+      model_name: gpt-5  # Use a similar model for token counting
 
   qwen3_coder_plus:
     backend: openai_compatible

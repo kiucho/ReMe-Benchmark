@@ -54,17 +54,25 @@ class BasicReActAgent:
         utility_threshold: float = 0.5,
         memory_base_url: str = "http://0.0.0.0:8002/",
         memory_workspace_id: str = "nika_v1",
+        temperature: float | None = None,
+        use_memory_retrieval: bool | None = None,
+        enable_memory_store: bool | None = None,
     ):
         self.max_steps = max_steps
         self.use_memory = use_memory
+        self.use_memory_retrieval = use_memory if use_memory_retrieval is None else use_memory_retrieval
         self.use_memory_addition = use_memory_addition if use_memory else False
         self.use_memory_deletion = use_memory_deletion if use_memory else False
+        self.enable_memory_store = (
+            (use_memory_addition or use_memory) if enable_memory_store is None else enable_memory_store
+        )
         self.freq_threshold = freq_threshold
         self.utility_threshold = utility_threshold
         self.memory_base_url = memory_base_url
         self.memory_workspace_id = memory_workspace_id
         self.retrieved_memory_list: list[Any] = []
         self.task_history: list[Any] = []
+        self.temperature = temperature
 
         # Set up Langfuse callback handler
         # Initialize Langfuse client
@@ -79,11 +87,11 @@ class BasicReActAgent:
             system_logger.warning("Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.")
 
         # load agent and tools
-        diagnosis_agent = DiagnosisAgent(backend_model=backend_model)
+        diagnosis_agent = DiagnosisAgent(backend_model=backend_model, temperature=temperature)
         asyncio.run(diagnosis_agent.load_tools())
         self.diagnosis_agent = diagnosis_agent.get_agent()
 
-        submission_agent = SubmissionAgent(backend_model=backend_model)
+        submission_agent = SubmissionAgent(backend_model=backend_model, temperature=temperature)
         asyncio.run(submission_agent.load_tools())
         self.submission_agent = submission_agent.get_agent()
 
@@ -181,7 +189,7 @@ class BasicReActAgent:
             "enriched_task_description": None,
         }
 
-        if self.use_memory:
+        if self.use_memory and self.use_memory_retrieval:
             if previous_memories and len(previous_memories) > 0:
                 # Use previous memories from failed attempts (retry scenario)
                 memory_debug_info["previous_memories"] = previous_memories
@@ -250,24 +258,33 @@ class BasicReActAgent:
 
         return result
 
-    def store_memory_from_result(self, task_id: str, task_history: list, score: float) -> tuple[list, dict]:
+    def store_memory_from_result(
+        self,
+        task_id: str,
+        task_history: list,
+        score: float,
+        *,
+        keep_failure_memories: bool = False,
+        rewrite_on_failure: bool = False,
+    ) -> tuple[list, dict]:
         """Store trajectory as memory after successful task completion.
         
         Returns:
             Tuple of (memory_list, memory_extraction_info) where memory_extraction_info contains
             detailed information about memory extraction and deduplication.
         """
-        if not self.use_memory:
+        if not self.enable_memory_store:
             return [], {}
 
         trajectory = self.get_traj_from_messages(task_id, task_history, score)
-        use_rewrite = score != 1.0
+        is_success = score == 1.0
+        use_rewrite = (not is_success) and rewrite_on_failure
         query = trajectory.get("metadata", {}).get("query")
         new_memories, metadata = self.add_memory([trajectory], query=query, rewrite=use_rewrite)
 
         memory_extraction_info = {
             "score": score,
-            "is_success": score == 1.0,
+            "is_success": is_success,
             "trajectory": trajectory,
             "memory_list_before_dedup": metadata.get("memory_list_before_dedup", []),
             "memory_list_after_dedup": new_memories,
@@ -283,12 +300,15 @@ class BasicReActAgent:
             }
 
         # If task failed, delete the newly created memories (for retry use)
-        if score != 1.0 and new_memories:
+        if not is_success and new_memories and not keep_failure_memories:
             memory_extraction_info["action"] = "deleted_for_retry"
             self.delete_memory_by_ids([mem["memory_id"] for mem in new_memories])
             return new_memories, memory_extraction_info
         
-        memory_extraction_info["action"] = "added_to_pool" if new_memories else "no_memories_extracted"
+        if not is_success and keep_failure_memories and new_memories:
+            memory_extraction_info["action"] = "added_failure_to_pool"
+        else:
+            memory_extraction_info["action"] = "added_to_pool" if new_memories else "no_memories_extracted"
         return new_memories, memory_extraction_info
 
     async def diagnosis_agent_builder(self, state: AgentState):

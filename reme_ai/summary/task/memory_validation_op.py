@@ -92,6 +92,7 @@ class MemoryValidationOp(BaseAsyncOp):
 
                     is_valid = parsed.get("is_valid", True)
                     score = parsed.get("score", 0.5)
+                    feedback_text = parsed.get("feedback", "")
 
                     # Set validation threshold
                     validation_threshold = self.op_params.get("validation_threshold", 0.5)
@@ -99,7 +100,7 @@ class MemoryValidationOp(BaseAsyncOp):
                     return {
                         "is_valid": is_valid and score >= validation_threshold,
                         "score": score,
-                        "feedback": response_content,
+                        "feedback": feedback_text,
                         "reason": (
                             ""
                             if (is_valid and score >= validation_threshold)

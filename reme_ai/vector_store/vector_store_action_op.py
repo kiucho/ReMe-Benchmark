@@ -13,6 +13,7 @@ class VectorStoreActionOp(BaseAsyncOp):
 
     This operation supports multiple actions:
     - copy: Copy memories from one workspace to another
+    - count: Count memories in a workspace
     - delete: Delete an entire workspace
     - delete_ids: Delete specific memories by their IDs
     - dump: Export workspace memories to a file
@@ -53,6 +54,13 @@ class VectorStoreActionOp(BaseAsyncOp):
                 src_workspace_id=src_workspace_id,
                 dest_workspace_id=workspace_id,
             )
+
+        elif action == "count":
+            nodes = await self.vector_store.async_list_workspace_nodes(workspace_id=workspace_id)
+            try:
+                result = len(nodes)
+            except TypeError:
+                result = len(list(nodes))
 
         elif action == "delete":
             if await self.vector_store.async_exist_workspace(workspace_id):
@@ -99,4 +107,4 @@ class VectorStoreActionOp(BaseAsyncOp):
         else:
             raise ValueError(f"invalid action={action}")
 
-        self.context.response.metadata["action_result"] = str(result)
+        self.context.response.metadata["action_result"] = result
