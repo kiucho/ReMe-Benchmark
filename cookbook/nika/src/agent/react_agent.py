@@ -459,11 +459,12 @@ class BasicReActAgent:
     def update_memory_information(self, memory_list: list, update_utility: bool = False):
         """Update memory usage records."""
         try:
+            sanitized_memory_list = self._sanitize_retrieved_memory_list(memory_list)
             response = requests.post(
                 url=f"{self.memory_base_url}record_task_memory",
                 json={
                     "workspace_id": self.memory_workspace_id,
-                    "memory_dicts": memory_list,
+                    "memory_dicts": sanitized_memory_list,
                     "update_utility": update_utility,
                 },
             )
@@ -471,6 +472,28 @@ class BasicReActAgent:
             system_logger.info(f"Updated memory information: {response.json()}")
         except requests.RequestException as e:
             system_logger.error(f"Failed to update memory information: {e}")
+
+    @staticmethod
+    def _sanitize_retrieved_memory_list(memory_list: list) -> list:
+        """Remove retrieval-only fields before persisting memory usage updates."""
+        if not memory_list:
+            return []
+        sanitized: list = []
+        for memory in memory_list:
+            if not isinstance(memory, dict):
+                sanitized.append(memory)
+                continue
+            memory_copy = dict(memory)
+            metadata = memory_copy.get("metadata")
+            if isinstance(metadata, dict):
+                metadata = dict(metadata)
+                metadata.pop("embedding_score", None)
+                metadata.pop("_score", None)
+                memory_copy["metadata"] = metadata
+            memory_copy.pop("embedding_score", None)
+            memory_copy.pop("_score", None)
+            sanitized.append(memory_copy)
+        return sanitized
 
     def delete_memory(self):
         """Delete low-quality memories based on frequency and utility thresholds."""

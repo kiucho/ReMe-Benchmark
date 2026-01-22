@@ -3,6 +3,7 @@ import asyncio
 import logging
 
 from agent.react_agent import BasicReActAgent
+from agent.react_agent_on_demand import OnDemandReActAgent
 from nika.utils.logger import system_logger
 from nika.utils.session import Session
 
@@ -25,6 +26,21 @@ def _agent_selector(
     match agent_type.lower():
         case "react":
             return BasicReActAgent(
+                backend_model=backend_model,
+                max_steps=max_steps,
+                use_memory=use_memory,
+                use_memory_addition=use_memory_addition,
+                use_memory_deletion=use_memory_deletion,
+                freq_threshold=freq_threshold,
+                utility_threshold=utility_threshold,
+                memory_base_url=memory_base_url,
+                memory_workspace_id=memory_workspace_id,
+                temperature=temperature,
+                use_memory_retrieval=use_memory_retrieval,
+                enable_memory_store=enable_memory_store,
+            )
+        case "react_on_demand":
+            return OnDemandReActAgent(
                 backend_model=backend_model,
                 max_steps=max_steps,
                 use_memory=use_memory,

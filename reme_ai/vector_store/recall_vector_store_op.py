@@ -41,7 +41,7 @@ class RecallVectorStoreOp(BaseAsyncOp):
             response.metadata["memory_list"]: List of retrieved BaseMemory objects.
         """
         recall_key: str = self.op_params.get("recall_key", "query")
-        top_k: int = self.context.get("top_k", 3)
+        top_k: int = self.context.get("top_k", 10)
 
         query: str = self.context[recall_key]
         assert query, "query should be not empty!"

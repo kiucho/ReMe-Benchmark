@@ -211,6 +211,7 @@ def run_benchmark(
     backend_model: str = "gpt-5-mini",
     max_steps: int = 40,
     judge_model: str = "qwen3:32b",
+    agent_type: str = "react",
     mode: str = "online",
     use_memory: bool = False,
     use_memory_addition: bool = False,
@@ -316,7 +317,7 @@ def run_benchmark(
                 # Step 3: Start Agent with previous_memories from failed attempts
                 stage = "start_agent"
                 agent = start_agent(
-                    agent_type="react",
+                    agent_type=agent_type,
                     backend_model=backend_model,
                     max_steps=max_steps,
                     use_memory=use_memory,
@@ -616,6 +617,12 @@ def main():
         help="Backend model for the agent (default: azure/gpt-5.2)",
     )
     parser.add_argument(
+        "--agent-type",
+        type=str,
+        default="react",
+        help="Agent type to run (default: react).",
+    )
+    parser.add_argument(
         "--max-steps",
         type=int,
         default=40,
@@ -686,15 +693,39 @@ def main():
         action="store_true",
         help="Load existing memory dump before starting (for resuming interrupted experiments).",
     )
+    parser.add_argument(
+        "--memory-dump-path",
+        type=str,
+        default=None,
+        help=(
+            "Optional path to an existing memory dump directory to load before running. "
+            "If provided, it overrides the default resume-memory path derived from experiment-name."
+        ),
+    )
     args = parser.parse_args()
+    agent_type = args.agent_type
 
     # Resolve mode and memory flags
     is_offline = args.mode == "offline"
-    use_memory = args.use_memory or is_offline
-    use_memory_addition = args.use_memory_addition or args.use_memory or is_offline
-    use_memory_deletion = args.use_memory_deletion or args.use_memory
+    memory_requested = (
+        args.use_memory
+        or args.use_memory_addition
+        or args.use_memory_deletion
+        or args.resume_memory
+        or args.memory_dump_path
+        or is_offline
+    )
+
     if is_offline:
+        # Offline phase: build initial pool; retrieval and deletion are off.
+        use_memory = True
+        use_memory_addition = True
         use_memory_deletion = False
+    else:
+        # Online phase: always enable retrieval/add/delete.
+        use_memory = True
+        use_memory_addition = True
+        use_memory_deletion = True
 
     experience_pool_dir = args.experience_pool_dir or DEFAULT_EXPERIENCE_POOL_DIR
     temperature = args.temperature
@@ -703,12 +734,14 @@ def main():
 
     # Initialize memory workspace if memory is enabled
     if use_memory:
+        memory_dump_path = args.memory_dump_path
         if is_offline:
             dump_path = os.path.join(experience_pool_dir, args.memory_workspace_id)
             os.makedirs(dump_path, exist_ok=True)
             if args.resume_memory:
-                print(f"Resuming from existing experience pool: {dump_path}")
-                load_memory(workspace_id=args.memory_workspace_id, path=dump_path, api_url=args.memory_api_url)
+                load_path = memory_dump_path or dump_path
+                print(f"Resuming from existing experience pool: {load_path}")
+                load_memory(workspace_id=args.memory_workspace_id, path=load_path, api_url=args.memory_api_url)
             else:
                 print("Initializing ReMe memory workspace for offline pool (fresh start)...")
                 delete_workspace(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
@@ -718,21 +751,30 @@ def main():
                 dump_path = f"{RESULTS_DIR}/{args.experiment_name}/memory_dump_{args.memory_workspace_id}"
             else:
                 dump_path = f"{RESULTS_DIR}/memory_dump_{args.memory_workspace_id}"
-            if args.resume_memory:
+            load_path = None
+            if memory_dump_path:
+                load_path = memory_dump_path
+            elif args.resume_memory:
+                load_path = dump_path
+
+            if load_path:
                 # Resume from existing memory dump
-                print(f"Resuming from existing memory dump: {dump_path}")
-                load_memory(workspace_id=args.memory_workspace_id, path=dump_path, api_url=args.memory_api_url)
-            else:
+                print(f"Resuming from existing memory dump: {load_path}")
+                load_memory(workspace_id=args.memory_workspace_id, path=load_path, api_url=args.memory_api_url)
+            elif memory_requested:
                 # Fresh start: delete existing workspace
                 print("Initializing ReMe memory workspace (fresh start)...")
                 delete_workspace(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
                 time.sleep(2)
+            else:
+                print("Using existing ReMe memory workspace (no reload).")
 
     # Run benchmark
     run_benchmark(
         backend_model=args.backend_model,
         max_steps=args.max_steps,
         judge_model=args.judge_model,
+        agent_type=agent_type,
         use_memory=use_memory,
         use_memory_addition=use_memory_addition,
         use_memory_deletion=use_memory_deletion,

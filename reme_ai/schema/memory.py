@@ -438,6 +438,23 @@ class ToolMemory(BaseMemory):
         )
 
 
+def _attach_embedding_score(memory: BaseMemory, node: VectorNode) -> BaseMemory:
+    """Attach retrieval embedding score from VectorNode metadata if present."""
+    if not isinstance(node, VectorNode):
+        return memory
+    score = node.metadata.get("_score") if isinstance(node.metadata, dict) else None
+    if score is None:
+        return memory
+    try:
+        embedding_score = float(score)
+    except (TypeError, ValueError):
+        return memory
+    metadata = dict(memory.metadata or {})
+    metadata["embedding_score"] = embedding_score
+    memory.update_metadata(metadata)
+    return memory
+
+
 def vector_node_to_memory(node: VectorNode):
     """Convert a VectorNode to the appropriate memory type.
 
@@ -457,13 +474,16 @@ def vector_node_to_memory(node: VectorNode):
     """
     memory_type = node.metadata.get("memory_type")
     if memory_type == "task":
-        return TaskMemory.from_vector_node(node)
+        memory = TaskMemory.from_vector_node(node)
+        return _attach_embedding_score(memory, node)
 
     elif memory_type == "personal":
-        return PersonalMemory.from_vector_node(node)
+        memory = PersonalMemory.from_vector_node(node)
+        return _attach_embedding_score(memory, node)
 
     elif memory_type == "tool":
-        return ToolMemory.from_vector_node(node)
+        memory = ToolMemory.from_vector_node(node)
+        return _attach_embedding_score(memory, node)
 
     else:
         raise RuntimeError(f"memory_type={memory_type} not supported!")

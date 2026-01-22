@@ -1,6 +1,7 @@
 """Operation for deleting memories based on frequency and utility thresholds."""
 
 from typing import Iterable
+import json
 
 from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncOp
@@ -48,10 +49,22 @@ class DeleteMemoryOp(BaseAsyncOp):
 
         deleted_memory_ids = []
         for node in nodes:
-            freq = node.metadata.get("freq", 0)
-            utility = node.metadata.get("utility", 0)
+            # TaskMemory stores freq/utility inside the nested "metadata" field (JSON string).
+            raw_meta = node.metadata.get("metadata", {})
+            if isinstance(raw_meta, str):
+                try:
+                    raw_meta = json.loads(raw_meta)
+                except json.JSONDecodeError:
+                    raw_meta = {}
+            elif raw_meta is None:
+                raw_meta = {}
+
+            freq = raw_meta.get("freq", node.metadata.get("freq", 0))
+            utility = raw_meta.get("utility", node.metadata.get("utility", 0))
             if freq >= freq_threshold:
                 if utility * 1.0 / freq < utility_threshold:
                     deleted_memory_ids.append(node.unique_id)
 
         self.context.deleted_memory_ids = deleted_memory_ids
+        # Ensure downstream UpdateVectorStoreOp can read deletion list.
+        self.context.response.metadata["deleted_memory_ids"] = deleted_memory_ids
