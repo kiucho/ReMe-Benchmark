@@ -1,8 +1,5 @@
 #!/bin/bash
 
-ROOT_DIR=$(cd "$(dirname "$0")" && pwd)
-cd "$ROOT_DIR"
-
 CURR_TIME=$(date +%Y%m%d%H%M%S)
 NUM_TRIALS=1
 EXPERIMENT_NAME=wo_mem_${CURR_TIME}
