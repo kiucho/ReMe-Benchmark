@@ -1,13 +1,13 @@
 import os
 
+from nika.config import BASE_DIR
 from nika.utils.session import Session
 
 
 class MCPServerConfig:
     def __init__(self):
         # load paths
-        base_dir = os.getenv("BASE_DIR")
-        self.mcp_server_dir = os.path.join(base_dir, "src/nika/service/mcp_server")
+        self.mcp_server_dir = os.path.join(BASE_DIR, "src/nika/service/mcp_server")
         self.session = Session()
         self.session.load_running_session()
 

@@ -2,12 +2,8 @@ import csv
 import os
 from dataclasses import asdict, dataclass
 
-from dotenv import load_dotenv
-
+from nika.config import RESULTS_DIR
 from nika.utils.session import get_experiment_name
-
-load_dotenv()
-RESULTS_DIR = os.getenv("RESULTS_DIR")
 
 
 @dataclass

@@ -43,6 +43,64 @@ class AgentState(TypedDict):
 
 
 class BasicReActAgent:
+    @staticmethod
+    def _get_embedding_score(memory: Any) -> float | None:
+        if not isinstance(memory, dict):
+            return None
+        score = memory.get("embedding_score")
+        if score is None:
+            metadata = memory.get("metadata")
+            if isinstance(metadata, dict):
+                score = metadata.get("embedding_score")
+                if score is None:
+                    score = metadata.get("_score")
+        return score
+
+    @classmethod
+    def _with_embedding_scores(cls, memory_list: list | None) -> list:
+        if not memory_list:
+            return []
+        enriched: list = []
+        for memory in memory_list:
+            if not isinstance(memory, dict):
+                enriched.append(memory)
+                continue
+            memory_copy = dict(memory)
+            score = cls._get_embedding_score(memory_copy)
+            if score is not None:
+                memory_copy["embedding_score"] = score
+            enriched.append(memory_copy)
+        return enriched
+
+    @classmethod
+    def _collect_embedding_scores(cls, memory_list: list | None) -> list[dict]:
+        if not memory_list:
+            return []
+        scores: list[dict] = []
+        for memory in memory_list:
+            if not isinstance(memory, dict):
+                continue
+            score = cls._get_embedding_score(memory)
+            if score is None:
+                continue
+            scores.append({"memory_id": memory.get("memory_id"), "embedding_score": score})
+        return scores
+
+    @classmethod
+    def _with_embedding_scores_in_response(cls, memory_response: Any) -> Any:
+        if not isinstance(memory_response, dict):
+            return memory_response
+        response_copy = dict(memory_response)
+        metadata = response_copy.get("metadata")
+        if not isinstance(metadata, dict):
+            return response_copy
+        metadata_copy = dict(metadata)
+        memory_list = metadata_copy.get("memory_list")
+        if isinstance(memory_list, list):
+            metadata_copy["memory_list"] = cls._with_embedding_scores(memory_list)
+        response_copy["metadata"] = metadata_copy
+        return response_copy
+
     def __init__(
         self,
         backend_model,
@@ -209,10 +267,13 @@ class BasicReActAgent:
             else:
                 # First attempt: retrieve from ReMe
                 memory_response = self.get_memory(task_description)
-                memory_debug_info["memory_response"] = memory_response
                 if memory_response and "answer" in memory_response:
-                    self.retrieved_memory_list = memory_response.get("metadata", {}).get("memory_list", [])
-                    memory_debug_info["retrieved_memory_list"] = self.retrieved_memory_list
+                    raw_memory_list = memory_response.get("metadata", {}).get("memory_list", [])
+                    self.retrieved_memory_list = raw_memory_list
+                    memory_debug_info["retrieved_memory_list"] = self._with_embedding_scores(raw_memory_list)
+                    embedding_scores = self._collect_embedding_scores(raw_memory_list)
+                    if embedding_scores:
+                        memory_debug_info["retrieved_memory_embedding_scores"] = embedding_scores
                     task_memory = memory_response["answer"]
                     system_logger.info(f"Retrieved task memory: {task_memory}")
                     enriched_task_description = (
@@ -220,6 +281,7 @@ class BasicReActAgent:
                         + "\n\nSome Related Experience to help you complete the task:\n"
                         + re.sub(r"(?i)\bMemory\s*(\d+)\s*[:]", r"Experience \1:", task_memory)
                     )
+                memory_debug_info["memory_response"] = self._with_embedding_scores_in_response(memory_response)
 
         memory_debug_info["enriched_task_description"] = enriched_task_description
 

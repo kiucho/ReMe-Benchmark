@@ -2,6 +2,8 @@ import argparse
 import csv
 import json
 import os
+import shutil
+import tempfile
 import time
 
 import polars as pl
@@ -140,6 +142,35 @@ def count_memories(workspace_id: str, api_url: str = "http://0.0.0.0:8002/") -> 
         return int(action_result)
     except Exception:
         return None
+
+
+def prepare_memory_load_path(starting_memory_path: str | None, workspace_id: str) -> str | None:
+    """Prepare a loadable path for starting memory, even if filename doesn't match workspace_id."""
+    if not starting_memory_path:
+        return None
+
+    if os.path.isfile(starting_memory_path):
+        temp_dir = tempfile.mkdtemp(prefix=f"memory_load_{workspace_id}_")
+        dest = os.path.join(temp_dir, f"{workspace_id}.jsonl")
+        shutil.copy2(starting_memory_path, dest)
+        print(f"Prepared memory load path from file: {starting_memory_path} -> {dest}")
+        return temp_dir
+
+    if os.path.isdir(starting_memory_path):
+        expected = os.path.join(starting_memory_path, f"{workspace_id}.jsonl")
+        if os.path.exists(expected):
+            return starting_memory_path
+
+        jsonl_files = [f for f in os.listdir(starting_memory_path) if f.endswith(".jsonl")]
+        if len(jsonl_files) == 1:
+            temp_dir = tempfile.mkdtemp(prefix=f"memory_load_{workspace_id}_")
+            src = os.path.join(starting_memory_path, jsonl_files[0])
+            dest = os.path.join(temp_dir, f"{workspace_id}.jsonl")
+            shutil.copy2(src, dest)
+            print(f"Prepared memory load path from dir: {src} -> {dest}")
+            return temp_dir
+
+    return starting_memory_path
 
 
 def get_all_scores_from_session(session_dir: str) -> tuple[float, float, float]:
@@ -579,9 +610,12 @@ def main():
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["online", "offline"],
+        choices=["online", "offline", "online_no_memory"],
         default="online",
-        help="Run mode: online (benchmark) or offline (experience pool build).",
+        help=(
+            "Run mode: online (benchmark), offline (experience pool build), "
+            "or online_no_memory (benchmark without ReMe)."
+        ),
     )
     parser.add_argument(
         "--use-memory",
@@ -694,29 +728,41 @@ def main():
         help="Load existing memory dump before starting (for resuming interrupted experiments).",
     )
     parser.add_argument(
-        "--memory-dump-path",
+        "--starting-memory-path",
         type=str,
         default=None,
         help=(
-            "Optional path to an existing memory dump directory to load before running. "
+            "Optional path to starting memory to load before running. "
             "If provided, it overrides the default resume-memory path derived from experiment-name."
         ),
+    )
+    parser.add_argument(
+        "--memory-dump-path",
+        dest="starting_memory_path",
+        type=str,
+        default=None,
+        help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
     agent_type = args.agent_type
 
     # Resolve mode and memory flags
     is_offline = args.mode == "offline"
+    is_no_memory = args.mode == "online_no_memory"
     memory_requested = (
         args.use_memory
         or args.use_memory_addition
         or args.use_memory_deletion
         or args.resume_memory
-        or args.memory_dump_path
+        or args.starting_memory_path
         or is_offline
     )
 
-    if is_offline:
+    if is_no_memory:
+        use_memory = False
+        use_memory_addition = False
+        use_memory_deletion = False
+    elif is_offline:
         # Offline phase: build initial pool; retrieval and deletion are off.
         use_memory = True
         use_memory_addition = True
@@ -725,7 +771,7 @@ def main():
         # Online phase: always enable retrieval/add/delete.
         use_memory = True
         use_memory_addition = True
-        use_memory_deletion = True
+        use_memory_deletion = False # True
 
     experience_pool_dir = args.experience_pool_dir or DEFAULT_EXPERIENCE_POOL_DIR
     temperature = args.temperature
@@ -734,12 +780,13 @@ def main():
 
     # Initialize memory workspace if memory is enabled
     if use_memory:
-        memory_dump_path = args.memory_dump_path
+        starting_memory_path = args.starting_memory_path
         if is_offline:
             dump_path = os.path.join(experience_pool_dir, args.memory_workspace_id)
             os.makedirs(dump_path, exist_ok=True)
             if args.resume_memory:
-                load_path = memory_dump_path or dump_path
+                load_path = starting_memory_path or dump_path
+                load_path = prepare_memory_load_path(load_path, args.memory_workspace_id)
                 print(f"Resuming from existing experience pool: {load_path}")
                 load_memory(workspace_id=args.memory_workspace_id, path=load_path, api_url=args.memory_api_url)
             else:
@@ -752,12 +799,13 @@ def main():
             else:
                 dump_path = f"{RESULTS_DIR}/memory_dump_{args.memory_workspace_id}"
             load_path = None
-            if memory_dump_path:
-                load_path = memory_dump_path
+            if starting_memory_path:
+                load_path = starting_memory_path
             elif args.resume_memory:
                 load_path = dump_path
 
             if load_path:
+                load_path = prepare_memory_load_path(load_path, args.memory_workspace_id)
                 # Resume from existing memory dump
                 print(f"Resuming from existing memory dump: {load_path}")
                 load_memory(workspace_id=args.memory_workspace_id, path=load_path, api_url=args.memory_api_url)

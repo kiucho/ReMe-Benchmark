@@ -2,10 +2,10 @@ import json
 import os
 from typing import List
 
-from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
+from nika.config import RESULTS_DIR
 from nika.orchestrator.problems.prob_pool import list_avail_problem_names as _list_avail_problems
 from nika.utils.errors import safe_tool
 
@@ -15,15 +15,10 @@ mcp = FastMCP(
     instructions="This mcp server contains the apis to interact with tasks, for now using to submit your solution.",
 )
 
-load_dotenv(verbose=True)
-
 # The following environment variables should be passed from the MCP client (i.e., the agent)
 LAB_SESSION_ID = os.getenv("LAB_SESSION_ID")
 gt_root_cause_name = os.getenv("root_cause_name")
 SESSION_DIR = os.getenv("SESSION_DIR")  # Full path including experiment_name if set
-
-base_dir = os.getenv("BASE_DIR")
-results_dir = os.getenv("RESULTS_DIR")
 
 
 class SubmissionFormat(BaseModel):
@@ -81,7 +76,7 @@ def submit(
     if SESSION_DIR:
         submission_path = SESSION_DIR
     else:
-        submission_path = f"{results_dir}/{gt_root_cause_name}/{LAB_SESSION_ID}"
+        submission_path = f"{RESULTS_DIR}/{gt_root_cause_name}/{LAB_SESSION_ID}"
     os.makedirs(submission_path, exist_ok=True)
     with open(f"{submission_path}/submission.json", "w+") as log_file:
         log_file.write(json.dumps(submission_dict))
