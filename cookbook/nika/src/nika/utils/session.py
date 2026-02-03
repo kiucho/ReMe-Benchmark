@@ -3,7 +3,7 @@ import os
 import shutil
 from datetime import datetime
 
-from nika.config import BASE_DIR, EXPERIMENT_NAME, RESULTS_DIR
+from nika.config import BASE_DIR, EXPERIMENT_NAME, RESULTS_DIR, RUNTIME_DIR
 
 
 def generate_code():
@@ -33,16 +33,16 @@ class Session:
     def init_session(self):
         self.session_id = generate_code()
         self.experiment_name = get_experiment_name()
-        os.makedirs(f"{BASE_DIR}/runtime", exist_ok=True)
+        os.makedirs(RUNTIME_DIR, exist_ok=True)
 
     def load_running_session(self):
-        session_meta = json.load(open(f"{BASE_DIR}/runtime/current_session.json", "r"))
+        session_meta = json.load(open(f"{RUNTIME_DIR}/current_session.json", "r"))
         for key, value in session_meta.items():
             setattr(self, key, value)
 
     def _write_session(self) -> str:
         session_dict = self.__dict__
-        with open(f"{BASE_DIR}/runtime/current_session.json", "w") as f:
+        with open(f"{RUNTIME_DIR}/current_session.json", "w") as f:
             f.write(json.dumps(session_dict, indent=4))
 
     def _build_session_dir(self) -> str:
@@ -79,10 +79,10 @@ class Session:
 
     def clear_session(self):
         shutil.move(
-            f"{BASE_DIR}/runtime/current_session.json",
+            f"{RUNTIME_DIR}/current_session.json",
             f"{self.session_dir}/session_meta.json",
         )
-        shutil.move(f"{BASE_DIR}/runtime/system.log", f"{self.session_dir}/system.log")
+        shutil.move(f"{RUNTIME_DIR}/system.log", f"{self.session_dir}/system.log")
 
     def start_session(self):
         self.start_time = datetime.now().timestamp()

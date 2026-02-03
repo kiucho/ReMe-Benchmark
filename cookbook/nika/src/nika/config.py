@@ -24,5 +24,9 @@ BASE_DIR = _resolve_env_path(os.getenv("BASE_DIR"), _env_base_dir) or str(_defau
 _results_env = os.getenv("RESULTS_DIR")
 RESULTS_DIR = _resolve_env_path(_results_env, _env_base_dir) if _results_env else str(Path(BASE_DIR) / "results")
 
+# Optional runtime directory for per-run isolation (e.g., parallel benchmarks).
+_runtime_env = os.getenv("RUNTIME_DIR")
+RUNTIME_DIR = _resolve_env_path(_runtime_env, _env_base_dir) if _runtime_env else str(Path(BASE_DIR) / "runtime")
+
 # Experiment name for organizing results (can be set via environment variable or programmatically)
 EXPERIMENT_NAME = os.getenv("EXPERIMENT_NAME", None)

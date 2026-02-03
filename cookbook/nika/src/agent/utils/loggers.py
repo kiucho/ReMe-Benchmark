@@ -9,7 +9,7 @@ from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.messages import BaseMessage, ToolMessage
 from langchain_core.outputs.generation import Generation
 
-from nika.config import BASE_DIR, RESULTS_DIR
+from nika.config import RESULTS_DIR, RUNTIME_DIR
 
 
 class FileLoggerHandler(BaseCallbackHandler):
@@ -23,7 +23,7 @@ class FileLoggerHandler(BaseCallbackHandler):
             self.logger.removeHandler(h)
 
         # read session info from file
-        with open(f"{BASE_DIR}/runtime/current_session.json", "r") as f:
+        with open(f"{RUNTIME_DIR}/current_session.json", "r") as f:
             session_info = json.load(f)
 
         session_dir = session_info.get("session_dir")

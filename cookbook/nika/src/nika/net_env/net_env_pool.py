@@ -42,9 +42,18 @@ def get_net_env_instance(scenario_name: str, **kwargs) -> NetworkEnvBase:
     Raises:
         ValueError: If the specified network environment is not found.
     """
+    lab_name_suffix = kwargs.pop("lab_name_suffix", None)
     if scenario_name not in _NET_ENVS:
         raise ValueError(f"Network environment '{scenario_name}' not found in the pool.")
-    return _NET_ENVS[scenario_name](**kwargs)
+    instance = _NET_ENVS[scenario_name](**kwargs)
+    if lab_name_suffix:
+        suffix = str(lab_name_suffix)
+        if not suffix.startswith("_"):
+            suffix = f"_{suffix}"
+        instance.name = f"{instance.name}{suffix}"
+        if instance.lab is not None:
+            instance.lab.name = instance.name
+    return instance
 
 
 def list_all_net_envs() -> dict[str, NetworkEnvBase]:

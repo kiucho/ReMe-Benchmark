@@ -5,8 +5,8 @@ NUM_SAMPLES=4 # default is 8
 
 CURR_TIME=$(date +%Y%m%d%H%M%S)
 EXPERIMENT_NAME=offline_pool_react_${CURR_TIME}
-BENCHMARK_FILE=benchmark_temp.csv
-MEMORY_WORKSPACE_ID=nika_temp_jh
+BENCHMARK_FILE=train_p2.csv
+MEMORY_WORKSPACE_ID=nika_jh
 AGENT_TYPE=react
 
 

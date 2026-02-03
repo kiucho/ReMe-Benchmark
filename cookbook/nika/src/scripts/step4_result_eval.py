@@ -3,7 +3,7 @@ import json
 import os
 import textwrap
 
-from nika.config import BASE_DIR
+from nika.config import RUNTIME_DIR
 from nika.evaluator.llm_judge import JudgeResponse, LLMJudge
 from nika.evaluator.result_log import EvalResult, record_eval_result
 from nika.evaluator.trace_parser import AgentTraceParser
@@ -175,12 +175,17 @@ def eval_results(judge_model, destroy_env: bool = True, *, record_summary: bool 
     eval_result = _eval_problem(session, judge_model)
     if record_summary:
         record_eval_result(eval_result)
-    net_env = get_net_env_instance(session.scenario_name)
+    lab_name_suffix = getattr(session, "lab_name_suffix", None)
+    net_env = get_net_env_instance(
+        session.scenario_name,
+        topo_size=session.scenario_topo_size,
+        lab_name_suffix=lab_name_suffix,
+    )
     if destroy_env and net_env.lab_exists():
         net_env.undeploy()
     logger.info(f"Destroyed network environment: {session.scenario_name} with session ID: {session.session_id}")
     session.clear_session()
-    assert not os.path.exists(f"{BASE_DIR}/runtime/current_session.json")
+    assert not os.path.exists(f"{RUNTIME_DIR}/current_session.json")
     return eval_result
 
 

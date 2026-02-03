@@ -1,12 +1,12 @@
 import logging
 import os
 
-from nika.config import BASE_DIR
+from nika.config import RUNTIME_DIR
 
 
 class SystemLogger:
     def __init__(self):
-        log_path = os.path.join(BASE_DIR, "runtime", "system.log")
+        log_path = os.path.join(RUNTIME_DIR, "system.log")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
         self.log_path = log_path
