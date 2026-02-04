@@ -11,7 +11,6 @@ def start_net_env(
     topo_size: Literal["s", "m", "l"] | None = None,
     redeploy: bool = True,
     experiment_name: str | None = None,
-    lab_name_suffix: str | None = None,
 ):
     """
     Every run starts a new session.
@@ -26,7 +25,6 @@ def start_net_env(
     net_env = get_net_env_instance(
         scenario_name,
         topo_size=topo_size,
-        lab_name_suffix=lab_name_suffix,
     )
     if net_env.lab_exists() and redeploy:
         net_env.undeploy()
@@ -39,21 +37,16 @@ def start_net_env(
     session.init_session()
     session.update_session("scenario_name", scenario_name)
     session.update_session("scenario_topo_size", topo_size)
-    if lab_name_suffix:
-        session.update_session("lab_name_suffix", lab_name_suffix)
     scenario_params = {}
     if topo_size is not None:
         scenario_params["topo_size"] = topo_size
-    if lab_name_suffix:
-        scenario_params["lab_name_suffix"] = lab_name_suffix
     if scenario_params:
         session.update_session("scenario_params", scenario_params)
     
     exp_info = f" (experiment: {experiment_name})" if experiment_name else ""
-    suffix_info = f" (lab suffix: {lab_name_suffix})" if lab_name_suffix else ""
     system_logger.info(
         f"Started network environment: {scenario_name} with size {topo_size} in session {session.session_id}"
-        f"{exp_info}{suffix_info}"
+        f"{exp_info}"
     )
     return net_env
 
@@ -84,17 +77,10 @@ if __name__ == "__main__":
         default=None,
         help="Optional experiment name to organize results under results/<experiment_name>/...",
     )
-    parser.add_argument(
-        "--lab-name-suffix",
-        type=str,
-        default=None,
-        help="Optional suffix to isolate Kathara lab names for parallel runs.",
-    )
 
     args = parser.parse_args()
     start_net_env(
         args.scenario,
         args.topo_size,
         experiment_name=args.experiment_name,
-        lab_name_suffix=args.lab_name_suffix,
     )

@@ -175,11 +175,9 @@ def eval_results(judge_model, destroy_env: bool = True, *, record_summary: bool 
     eval_result = _eval_problem(session, judge_model)
     if record_summary:
         record_eval_result(eval_result)
-    lab_name_suffix = getattr(session, "lab_name_suffix", None)
     net_env = get_net_env_instance(
         session.scenario_name,
         topo_size=session.scenario_topo_size,
-        lab_name_suffix=lab_name_suffix,
     )
     if destroy_env and net_env.lab_exists():
         net_env.undeploy()

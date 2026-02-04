@@ -257,8 +257,6 @@ def run_benchmark(
     temperature: float | None = None,
     num_samples: int = 8,
     experience_pool_dir: str | None = None,
-    lab_name_suffix: str | None = None,
-    wipe_kathara_before_each_trial: bool = True,
 ):
     """Run benchmark tests based on the benchmark.csv file.
 
@@ -336,8 +334,7 @@ def run_benchmark(
 
                 # Step 0: Wipe Kathara to ensure clean state (prevents contamination from previous runs)
                 stage = "wipe_kathara"
-                if wipe_kathara_before_each_trial:
-                    wipe_kathara()
+                wipe_kathara()
 
                 # Step 1: Start Network Environment (redeploy for each trial to reset state)
                 stage = "start_net_env"
@@ -346,7 +343,6 @@ def run_benchmark(
                     topo_size=topo_size,
                     redeploy=True,
                     experiment_name=experiment_name,
-                    lab_name_suffix=lab_name_suffix,
                 )
 
                 # Step 2: Inject Failure
@@ -588,7 +584,6 @@ def run_benchmark(
                 net_env = get_net_env_instance(
                     scenario,
                     topo_size=topo_size,
-                    lab_name_suffix=lab_name_suffix,
                 )
                 if net_env.lab_exists():
                     net_env.undeploy()
@@ -680,12 +675,6 @@ def main():
         help="Benchmark CSV file name (default: benchmark_selected.csv)",
     )
     parser.add_argument(
-        "--lab-name-suffix",
-        type=str,
-        default=None,
-        help="Optional suffix to isolate Kathara lab names for parallel runs.",
-    )
-    parser.add_argument(
         "--memory-workspace-id",
         type=str,
         default="nika_v1",
@@ -702,11 +691,6 @@ def main():
         type=int,
         default=1,
         help="Number of retry attempts per task (default: 1). Failed attempts generate memories for retries.",
-    )
-    parser.add_argument(
-        "--no-wipe-kathara",
-        action="store_true",
-        help="Disable global Kathara wipe before each trial (required for parallel runs).",
     )
     parser.add_argument(
         "--num-samples",
@@ -854,8 +838,6 @@ def main():
         mode=args.mode,
         num_samples=args.num_samples,
         experience_pool_dir=experience_pool_dir,
-        lab_name_suffix=args.lab_name_suffix,
-        wipe_kathara_before_each_trial=not args.no_wipe_kathara,
     )
 
     # Optionally dump memories after benchmark (final dump)
