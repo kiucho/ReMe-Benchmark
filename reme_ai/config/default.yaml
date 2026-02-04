@@ -265,16 +265,13 @@ flow:
 
 llm:
   default:
-    backend: litellm
-    model_name: azure/gpt-5.2  # "azure/" prefix + deployment name
-    params:
-      # api_base is read from AZURE_LLM_API_BASE environment variable
-      # api_version is read from AZURE_LLM_API_VERSION environment variable
-      custom_llm_provider: azure
-      temperature: 0
+    backend: openai
+    model_name: kt-gpt-oss-rh014
     token_count:
       backend: openai
-      model_name: gpt-5  # Use a similar model for token counting
+      model_name: gpt-4o  # Use a similar model for token counting
+      params:
+        temperature: 0
 
   qwen3_coder_plus:
     backend: openai_compatible
@@ -391,6 +388,15 @@ llm:
     token_count:
       backend: openai
       model_name: gpt-4o  # Use a similar model for token counting
+
+  kora_gpt-oss-120b:
+    backend: openai
+    model_name: kt-gpt-oss-rh014
+    token_count:
+      backend: openai
+      model_name: gpt-4o  # Use a similar model for token counting
+      params:
+        temperature: 0
 
 embedding_model:
   default:

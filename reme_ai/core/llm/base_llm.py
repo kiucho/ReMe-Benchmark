@@ -79,6 +79,8 @@ class BaseLLM(ABC):
         stream_kwargs: dict,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Internal async generator for streaming raw response chunks."""
+        if False:  # pragma: no cover
+            yield StreamChunk()
         raise NotImplementedError
 
     def _stream_chat_sync(
@@ -88,6 +90,8 @@ class BaseLLM(ABC):
         stream_kwargs: dict | None = None,
     ) -> Generator[StreamChunk, None, None]:
         """Internal synchronous generator for streaming raw response chunks."""
+        if False:  # pragma: no cover
+            yield StreamChunk()
         raise NotImplementedError
 
     async def stream_chat(
@@ -291,6 +295,10 @@ class BaseLLM(ABC):
 
                 await asyncio.sleep(1 + i)
         return default_value
+
+    async def achat(self, *args, **kwargs):
+        """Alias for chat() for FlowLLM-style naming compatibility."""
+        return await self.chat(*args, **kwargs)
 
     def chat_sync(
         self,

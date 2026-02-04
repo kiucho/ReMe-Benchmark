@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 
 from .base_embedding_model import BaseEmbeddingModel
 from ..context import C
+from ..utils.openai_httpx import make_httpx_async_client_for_openai
 
 
 @C.register_embedding_model("openai")
@@ -31,7 +32,10 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
 
     def _create_client(self):
         """Create and return an internal AsyncOpenAI client instance."""
-        return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+        http_client = make_httpx_async_client_for_openai(self.base_url)
+        if http_client is None:
+            return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+        return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url, http_client=http_client)
 
     async def _get_embeddings(self, input_text: list[str], **kwargs) -> list[list[float]]:
         """Fetch embeddings from the API for a batch of strings."""

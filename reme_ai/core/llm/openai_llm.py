@@ -1,10 +1,12 @@
 """Asynchronous OpenAI-compatible LLM implementation supporting streaming, tool calls, and reasoning content."""
 
 import os
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from loguru import logger
 from openai import AsyncOpenAI
+
+from flowllm.core.context import C as FlowC
 
 from .base_llm import BaseLLM
 from ..context import C
@@ -12,9 +14,11 @@ from ..enumeration import ChunkEnum
 from ..schema import Message
 from ..schema import StreamChunk
 from ..schema import ToolCall
+from ..utils.openai_httpx import make_httpx_async_client_for_openai
 
 
 @C.register_llm("openai")
+@FlowC.register_llm("openai")
 class OpenAILLM(BaseLLM):
     """Asynchronous LLM client for OpenAI-compatible APIs supporting streaming completions and tool execution."""
 
@@ -26,15 +30,32 @@ class OpenAILLM(BaseLLM):
     ):
         """Initialize the OpenAI async client with API credentials and model configuration."""
         super().__init__(**kwargs)
-        self.api_key: str = api_key or os.getenv("REME_LLM_API_KEY", "")
-        self.base_url: str = base_url or os.getenv("REME_LLM_BASE_URL", "")
+        # Support both ReMe env vars and FlowLLM env vars.
+        # Priority: explicit args > REME_* > FLOW_* > GPT_OSS_*.
+        self.api_key: str = (
+            api_key
+            or os.getenv("REME_LLM_API_KEY")
+            or os.getenv("FLOW_LLM_API_KEY")
+            or os.getenv("GPT_OSS_API_KEY")
+            or ""
+        )
+        self.base_url: str = (
+            base_url
+            or os.getenv("REME_LLM_BASE_URL")
+            or os.getenv("FLOW_LLM_BASE_URL")
+            or os.getenv("GPT_OSS_API_URL")
+            or ""
+        )
 
         # Create client using factory method
         self._client = self._create_client()
 
-    def _create_client(self):
+    def _create_client(self) -> Any:
         """Create and return an instance of the AsyncOpenAI client."""
-        return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+        http_client = make_httpx_async_client_for_openai(self.base_url)
+        if http_client is None:
+            return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+        return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url, http_client=http_client)
 
     def _build_stream_kwargs(
         self,
@@ -95,7 +116,7 @@ class OpenAILLM(BaseLLM):
                 for tool_call in delta.tool_calls:
                     self._accumulate_tool_call_chunk(tool_call, ret_tool_calls)
 
-        for tool_data in self._validate_and_serialize_tools(ret_tool_calls, tools):
+        for tool_data in self._validate_and_serialize_tools(ret_tool_calls, tools or []):
             yield StreamChunk(chunk_type=ChunkEnum.TOOL, chunk=tool_data)
 
     async def close(self):

@@ -242,7 +242,6 @@ def run_benchmark(
     backend_model: str = "gpt-5-mini",
     max_steps: int = 40,
     judge_model: str = "qwen3:32b",
-    agent_type: str = "react",
     mode: str = "online",
     use_memory: bool = False,
     use_memory_addition: bool = False,
@@ -357,7 +356,6 @@ def run_benchmark(
                 # Step 3: Start Agent with previous_memories from failed attempts
                 stage = "start_agent"
                 agent = start_agent(
-                    agent_type=agent_type,
                     backend_model=backend_model,
                     max_steps=max_steps,
                     use_memory=use_memory,
@@ -664,12 +662,6 @@ def main():
         help="Backend model for the agent (default: azure/gpt-5.2)",
     )
     parser.add_argument(
-        "--agent-type",
-        type=str,
-        default="react",
-        help="Agent type to run (default: react).",
-    )
-    parser.add_argument(
         "--max-steps",
         type=int,
         default=40,
@@ -768,7 +760,8 @@ def main():
         help=argparse.SUPPRESS,
     )
     args = parser.parse_args()
-    agent_type = args.agent_type
+
+
 
     # Resolve mode and memory flags
     is_offline = args.mode == "offline"
@@ -846,7 +839,6 @@ def main():
         backend_model=args.backend_model,
         max_steps=args.max_steps,
         judge_model=args.judge_model,
-        agent_type=agent_type,
         use_memory=use_memory,
         use_memory_addition=use_memory_addition,
         use_memory_deletion=use_memory_deletion,

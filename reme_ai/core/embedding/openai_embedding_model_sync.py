@@ -4,6 +4,7 @@ from openai import OpenAI
 
 from .openai_embedding_model import OpenAIEmbeddingModel
 from ..context import C
+from ..utils.openai_httpx import make_httpx_client_for_openai
 
 
 @C.register_embedding_model("openai_sync")
@@ -12,7 +13,10 @@ class OpenAIEmbeddingModelSync(OpenAIEmbeddingModel):
 
     def _create_client(self):
         """Create and return an internal synchronous OpenAI client instance."""
-        return OpenAI(api_key=self.api_key, base_url=self.base_url)
+        http_client = make_httpx_client_for_openai(self.base_url)
+        if http_client is None:
+            return OpenAI(api_key=self.api_key, base_url=self.base_url)
+        return OpenAI(api_key=self.api_key, base_url=self.base_url, http_client=http_client)
 
     def _get_embeddings_sync(self, input_text: list[str], **kwargs) -> list[list[float]]:
         """Fetch embeddings synchronously from the API for a batch of strings."""

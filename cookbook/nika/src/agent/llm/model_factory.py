@@ -1,5 +1,5 @@
 import os
-
+import httpx
 from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_deepseek import ChatDeepSeek
@@ -46,6 +46,21 @@ def load_model(backend_model: str = "gpt-oss:20b", temperature: float | None = N
             timeout=180,  # 3 minutes timeout
             max_retries=2,  # Retry up to 2 times on failure
             # model_kwargs=model_kwargs,
+        )
+    elif backend_model.startswith("gpt-oss-120b"):
+        _http_client = httpx.Client(verify=False, timeout=60.0)
+        _async_http_client = httpx.AsyncClient(verify=False, timeout=60.0)
+        _GPT_OSS_API_URL = os.getenv("GPT_OSS_API_URL")
+        _GPT_OSS_API_KEY = os.getenv("GPT_OSS_API_KEY")
+        llm = ChatOpenAI(
+            model="kt-gpt-oss-rh014",
+            base_url=_GPT_OSS_API_URL,
+            api_key=_GPT_OSS_API_KEY,
+            http_client=_http_client,
+            http_async_client=_async_http_client,
+            temperature=temperature,
+            timeout=180,  # 3 minutes timeout
+            max_retries=2,  # Retry up to 2 times on failure
         )
     else:
         raise ValueError(f"Unsupported backend model: {backend_model}")

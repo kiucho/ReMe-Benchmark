@@ -44,6 +44,48 @@ class AgentState(TypedDict):
 
 class BasicReActAgent:
     @staticmethod
+    def _extract_tool_parameters(tool: Any) -> dict | None:
+        """Extract a compact JSON schema for tool input parameters when available."""
+
+        args_schema = getattr(tool, "args_schema", None)
+        if args_schema is None:
+            return None
+
+        schema: Any = None
+        try:
+            if hasattr(args_schema, "model_json_schema"):
+                schema = args_schema.model_json_schema()
+            elif hasattr(args_schema, "schema"):
+                schema = args_schema.schema()
+        except Exception:
+            schema = None
+
+        if not isinstance(schema, dict):
+            return None
+
+        # Keep only the most useful top-level keys to avoid bloating trajectories.
+        keep_keys = ("type", "properties", "required", "description", "items", "enum")
+        return {k: schema[k] for k in keep_keys if k in schema}
+
+    @classmethod
+    def _build_tool_registry(cls, tools: list[Any] | None) -> dict[str, dict]:
+        if not tools:
+            return {}
+
+        registry: dict[str, dict] = {}
+        for tool in tools:
+            name = getattr(tool, "name", None)
+            if not name:
+                continue
+            description = getattr(tool, "description", "") or ""
+            parameters = cls._extract_tool_parameters(tool)
+            registry[str(name)] = {
+                "description": str(description),
+                "parameters": parameters,
+            }
+        return registry
+
+    @staticmethod
     def _get_embedding_score(memory: Any) -> float | None:
         if not isinstance(memory, dict):
             return None
@@ -153,6 +195,15 @@ class BasicReActAgent:
         asyncio.run(submission_agent.load_tools())
         self.submission_agent = submission_agent.get_agent()
 
+        # Tool metadata registry for enriching serialized tool calls in trajectories.
+        # This keeps trajectories self-contained without needing separate log parsing.
+        combined_tools: list[Any] = []
+        if getattr(diagnosis_agent, "tools", None):
+            combined_tools.extend(list(diagnosis_agent.tools))
+        if getattr(submission_agent, "tools", None):
+            combined_tools.extend(list(submission_agent.tools))
+        self._tool_registry = self._build_tool_registry(combined_tools)
+
         # build the state graph
         worker_builder = StateGraph(AgentState)
         worker_builder.add_node("diagnosis_agent", self.diagnosis_agent_builder)
@@ -201,15 +252,128 @@ class BasicReActAgent:
             return role_value
         return "user"
 
-    def _message_key(self, message: Any) -> tuple[str | None, str]:
+    @staticmethod
+    def _stable_json_dumps(value: Any) -> str:
+        try:
+            return json.dumps(value, ensure_ascii=True, sort_keys=True, default=str)
+        except TypeError:
+            return str(value)
+
+    def _extract_tool_calls(self, message: Any) -> list[dict]:
+        """Extract tool call metadata from a message in a JSON-serializable format.
+
+        We normalize to an OpenAI-style schema so downstream ReMe schema parsing
+        can reconstruct tool calls reliably.
+        """
+
+        raw_tool_calls: Any = None
+        if isinstance(message, dict):
+            raw_tool_calls = message.get("tool_calls")
+        elif hasattr(message, "tool_calls"):
+            raw_tool_calls = getattr(message, "tool_calls")
+
+        if not raw_tool_calls:
+            return []
+
+        normalized: list[dict] = []
+        for i, tc in enumerate(list(raw_tool_calls)):
+            tc_dict: dict = tc if isinstance(tc, dict) else {}
+            if not tc_dict:
+                if hasattr(tc, "model_dump"):
+                    try:
+                        tc_dict = tc.model_dump()  # type: ignore[assignment]
+                    except Exception:
+                        tc_dict = {}
+                elif hasattr(tc, "dict"):
+                    try:
+                        tc_dict = tc.dict()  # type: ignore[assignment]
+                    except Exception:
+                        tc_dict = {}
+
+            # Prefer OpenAI-style payload if already present.
+            tc_type = tc_dict.get("type") or getattr(tc, "type", None) or "function"
+
+            function_payload: dict = {}
+            if "function" in tc_dict and isinstance(tc_dict.get("function"), dict):
+                function_payload = tc_dict["function"]
+
+            name = (
+                function_payload.get("name")
+                or tc_dict.get("name")
+                or getattr(tc, "name", None)
+                or getattr(getattr(tc, "function", None), "name", None)
+                or ""
+            )
+
+            arguments = (
+                function_payload.get("arguments")
+                or tc_dict.get("arguments")
+                or tc_dict.get("args")
+                or getattr(tc, "arguments", None)
+                or getattr(tc, "args", None)
+                or getattr(getattr(tc, "function", None), "arguments", None)
+                or ""
+            )
+            if not isinstance(arguments, str):
+                arguments = self._stable_json_dumps(arguments)
+            if isinstance(arguments, str) and not arguments.strip():
+                arguments = "{}"
+
+            tc_id = (
+                tc_dict.get("id")
+                or tc_dict.get("tool_call_id")
+                or tc_dict.get("call_id")
+                or getattr(tc, "id", None)
+                or ""
+            )
+
+            tool_meta = self._tool_registry.get(str(name), {}) if hasattr(self, "_tool_registry") else {}
+            description = tool_meta.get("description") or ""
+            parameters = tool_meta.get("parameters")
+
+            function_dict: dict = {"name": str(name), "arguments": str(arguments)}
+            if description:
+                function_dict["description"] = str(description)
+            if isinstance(parameters, dict) and parameters:
+                function_dict["parameters"] = parameters
+
+            normalized.append(
+                {
+                    "index": tc_dict.get("index", i),
+                    "id": tc_id,
+                    "type": "function" if str(tc_type) != "function" else "function",
+                    "function": function_dict,
+                },
+            )
+
+        return normalized
+
+    def _message_key(self, message: Any) -> tuple[str | None, str, str, str, str]:
+        """Build a key for de-duplicating consecutive messages.
+
+        IMPORTANT: include tool call metadata so tool-calling assistant messages
+        with empty content aren't incorrectly treated as duplicates.
+        """
+
         if hasattr(message, "content"):
             role = self._normalize_role(getattr(message, "type", None))
             content = self._normalize_content(message.content)
-            return (role, content)
+            name = str(getattr(message, "name", "") or "")
+            tool_call_id = str(getattr(message, "tool_call_id", "") or "")
+            tool_calls = self._extract_tool_calls(message)
+            tool_calls_key = self._stable_json_dumps(tool_calls) if tool_calls else ""
+            return (role, content, name, tool_call_id, tool_calls_key)
+
         if isinstance(message, dict):
             role = self._normalize_role(message.get("role"))
-            return (role, self._normalize_content(message.get("content", "")))
-        return (None, str(message))
+            content = self._normalize_content(message.get("content", ""))
+            name = str(message.get("name", "") or "")
+            tool_call_id = str(message.get("tool_call_id", "") or "")
+            tool_calls = self._extract_tool_calls(message)
+            tool_calls_key = self._stable_json_dumps(tool_calls) if tool_calls else ""
+            return (role, content, name, tool_call_id, tool_calls_key)
+
+        return (None, str(message), "", "", "")
 
     def _extend_task_history(self, messages: list[Any]):
         if not messages:
@@ -258,12 +422,16 @@ class BasicReActAgent:
                     # memory_text = f"Experience {i}:\n  When to use: {condition}\n  Content: {memory_content}\n"
                     memory_text = f"{memory_content}\n"
                     formatted_memories.append(memory_text)
-                enriched_task_description = (
-                    task_description
-                    + "\n\nSome Related Experience to help you complete the task:\n"
-                    + "\n".join(formatted_memories)
-                )
-                system_logger.info(f"Using {len(previous_memories)} previous memories from failed attempts")
+
+                previous_memory_block = "\n".join(formatted_memories).strip()
+                if previous_memory_block:
+                    enriched_task_description = (
+                        task_description
+                        + "\n\nSome Related Experience to help you complete the task:\n"
+                        + previous_memory_block
+                        + "\n"
+                    )
+                    system_logger.info(f"Using {len(previous_memories)} previous memories from failed attempts")
             else:
                 # First attempt: retrieve from ReMe
                 memory_response = self.get_memory(task_description)
@@ -274,13 +442,30 @@ class BasicReActAgent:
                     embedding_scores = self._collect_embedding_scores(raw_memory_list)
                     if embedding_scores:
                         memory_debug_info["retrieved_memory_embedding_scores"] = embedding_scores
-                    task_memory = memory_response["answer"]
-                    system_logger.info(f"Retrieved task memory: {task_memory}")
-                    enriched_task_description = (
-                        task_description
-                        + "\n\nSome Related Experience to help you complete the task:\n"
-                        + re.sub(r"(?i)\bMemory\s*(\d+)\s*[:]", r"Experience \1:", task_memory)
-                    )
+
+                    task_memory = memory_response.get("answer") or ""
+                    memory_block = ""
+                    if isinstance(task_memory, str) and task_memory.strip():
+                        memory_block = re.sub(r"(?i)\bMemory\s*(\d+)\s*[:]", r"Experience \1:", task_memory).strip()
+                        system_logger.info(f"Retrieved task memory: {task_memory}")
+                    elif isinstance(raw_memory_list, list) and raw_memory_list:
+                        # Fallback: build a minimal memory block from structured memory list.
+                        lines: list[str] = []
+                        for mem in raw_memory_list:
+                            if not isinstance(mem, dict):
+                                continue
+                            content = mem.get("content") or ""
+                            if isinstance(content, str) and content.strip():
+                                lines.append(content.strip())
+                        memory_block = "\n".join(lines).strip()
+
+                    if memory_block:
+                        enriched_task_description = (
+                            task_description
+                            + "\n\nSome Related Experience to help you complete the task:\n"
+                            + memory_block
+                            + "\n"
+                        )
                 memory_debug_info["memory_response"] = self._with_embedding_scores_in_response(memory_response)
 
         memory_debug_info["enriched_task_description"] = enriched_task_description
@@ -585,7 +770,21 @@ class BasicReActAgent:
                 pattern = r"\n\nSome Related Experience to help you complete the task:.*"
                 content = re.sub(pattern, "", content, flags=re.DOTALL)
                 role = self._normalize_role(msg.type)
-                cleaned_messages.append({"role": role, "content": content})
+                message_dict: dict = {"role": role, "content": content}
+
+                tool_calls = self._extract_tool_calls(msg)
+                if tool_calls:
+                    message_dict["tool_calls"] = tool_calls
+
+                tool_call_id = getattr(msg, "tool_call_id", "")
+                if tool_call_id:
+                    message_dict["tool_call_id"] = str(tool_call_id)
+
+                name = getattr(msg, "name", None)
+                if name:
+                    message_dict["name"] = str(name)
+
+                cleaned_messages.append(message_dict)
                 if not query and role == "user":
                     query = content
             elif isinstance(msg, dict):
@@ -593,7 +792,21 @@ class BasicReActAgent:
                 pattern = r"\n\nSome Related Experience to help you complete the task:.*"
                 content = re.sub(pattern, "", content, flags=re.DOTALL)
                 role = self._normalize_role(msg.get("role", "user"))
-                cleaned_messages.append({"role": role, "content": content})
+                message_dict = {"role": role, "content": content}
+
+                tool_calls = self._extract_tool_calls(msg)
+                if tool_calls:
+                    message_dict["tool_calls"] = tool_calls
+
+                tool_call_id = msg.get("tool_call_id", "")
+                if tool_call_id:
+                    message_dict["tool_call_id"] = str(tool_call_id)
+
+                name = msg.get("name")
+                if name:
+                    message_dict["name"] = str(name)
+
+                cleaned_messages.append(message_dict)
                 if not query and role == "user":
                     query = content
 

@@ -6,19 +6,26 @@ from openai import OpenAI
 
 from .openai_llm import OpenAILLM
 from ..context import C
+
+from flowllm.core.context import C as FlowC
 from ..enumeration import ChunkEnum
 from ..schema import Message
 from ..schema import StreamChunk
 from ..schema import ToolCall
+from ..utils.openai_httpx import make_httpx_client_for_openai
 
 
 @C.register_llm("openai_sync")
+@FlowC.register_llm("openai_sync")
 class OpenAILLMSync(OpenAILLM):
     """Synchronous LLM client for OpenAI-compatible APIs, inheriting from OpenAILLM."""
 
     def _create_client(self):
         """Create and return an instance of the synchronous OpenAI client."""
-        return OpenAI(api_key=self.api_key, base_url=self.base_url)
+        http_client = make_httpx_client_for_openai(self.base_url)
+        if http_client is None:
+            return OpenAI(api_key=self.api_key, base_url=self.base_url)
+        return OpenAI(api_key=self.api_key, base_url=self.base_url, http_client=http_client)
 
     def _stream_chat_sync(
         self,
@@ -49,7 +56,7 @@ class OpenAILLMSync(OpenAILLM):
                 for tool_call in delta.tool_calls:
                     self._accumulate_tool_call_chunk(tool_call, ret_tool_calls)
 
-        for tool_data in self._validate_and_serialize_tools(ret_tool_calls, tools):
+        for tool_data in self._validate_and_serialize_tools(ret_tool_calls, tools or []):
             yield StreamChunk(chunk_type=ChunkEnum.TOOL, chunk=tool_data)
 
     def close_sync(self):

@@ -9,7 +9,9 @@ which extends FlowLLM with specialized memory management capabilities including:
 """
 
 import asyncio
+import os
 import sys
+from typing import cast
 
 from flowllm.core.application import Application
 from flowllm.core.context import C
@@ -17,7 +19,7 @@ from flowllm.core.schema import FlowResponse
 
 from reme_ai.config.config_parser import ConfigParser
 
-# Import LiteLLM-based models to register them in the FlowLLM registry
+# Import LLM implementations to register them in the FlowLLM registry
 from reme_ai.core.llm import LiteLLM, LiteLLMSync  # noqa: F401
 from reme_ai.core.embedding import LiteEmbeddingModel, LiteEmbeddingModelSync  # noqa: F401
 
@@ -34,11 +36,11 @@ class ReMeApp(Application):
     def __init__(
         self,
         *args,
-        llm_api_key: str = None,
-        llm_api_base: str = None,
-        embedding_api_key: str = None,
-        embedding_api_base: str = None,
-        config_path: str = None,
+        llm_api_key: str | None = None,
+        llm_api_base: str | None = None,
+        embedding_api_key: str | None = None,
+        embedding_api_base: str | None = None,
+        config_path: str | None = None,
         **kwargs,
     ):
         """
@@ -127,15 +129,28 @@ class ReMeApp(Application):
             - README.md "Environment Configuration" for environment variable setup
             - example.env for all available environment variables
         """
+        # Allow using GPT_OSS_* env vars without changing FlowLLM env var names.
+        # If explicit args are provided, they take precedence.
+        if llm_api_key is None:
+            llm_api_key = os.getenv("GPT_OSS_API_KEY") or llm_api_key
+        if llm_api_base is None:
+            llm_api_base = os.getenv("GPT_OSS_API_URL") or llm_api_base
+
+        # FlowLLM's Application type hints use `str` even though None is accepted at runtime.
+        llm_api_key_str = llm_api_key or ""
+        llm_api_base_str = llm_api_base or ""
+        embedding_api_key_str = embedding_api_key or ""
+        embedding_api_base_str = embedding_api_base or ""
+        config_path_str = config_path or ""
+
         super().__init__(
             *args,
-            llm_api_key=llm_api_key,
-            llm_api_base=llm_api_base,
-            embedding_api_key=embedding_api_key,
-            embedding_api_base=embedding_api_base,
-            service_config=None,
+            llm_api_key=llm_api_key_str,
+            llm_api_base=llm_api_base_str,
+            embedding_api_key=embedding_api_key_str,
+            embedding_api_base=embedding_api_base_str,
             parser=ConfigParser,
-            config_path=config_path,
+            config_path=config_path_str,
             load_default_config=True,
             **kwargs,
         )
@@ -181,7 +196,7 @@ class ReMeApp(Application):
             ```
         """
         assert name in C.flow_dict, f"Invalid flow_name={name} !"
-        result: FlowResponse = await self.async_execute_flow(name=name, **kwargs)
+        result = cast(FlowResponse, await self.async_execute_flow(name=name, **kwargs))
         return result.model_dump()
 
     def execute(self, name: str, **kwargs) -> dict:

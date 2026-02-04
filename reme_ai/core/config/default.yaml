@@ -15,7 +15,7 @@ http:
 llm:
   default:
     backend: openai
-    model_name: qwen3-30b-a3b-instruct-2507
+    model_name: gpt-oss-120b
 
   qwen3_max_instruct:
     backend: openai
