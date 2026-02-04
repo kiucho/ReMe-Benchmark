@@ -556,6 +556,8 @@ def run_benchmark(
             error_type = type(e).__name__
             error_message = str(e)
             print(f"  Case failed at {error_stage}: {error_type}: {error_message}")
+            # Fail-fast: abort the benchmark run on unexpected errors (e.g., expired auth / lost connectivity).
+            raise SystemExit(1) from e
         finally:
             if case_status == "completed":
                 print(
