@@ -1,6 +1,6 @@
 # flake8: noqa: E402, E501
 import os
-from typing import List, Any
+from typing import List, Any, Tuple, Optional
 
 from tqdm import tqdm
 
@@ -12,28 +12,76 @@ load_dotenv("../../.env")
 import re
 import time
 import json
-import ray
 import requests
 import datetime
 
-from openai import AzureOpenAI
 from appworld import AppWorld, load_task_ids
 from jinja2 import Template
 from loguru import logger
+from openai import OpenAI
 
 from prompt import NEW_PROMPT_TEMPLATE
 
 
-@ray.remote
 class AppworldReactAgent:
-    """A minimal ReAct Agent for AppWorld tasks using Azure OpenAI."""
+    """A minimal ReAct Agent for AppWorld tasks."""
+
+    @staticmethod
+    def _create_llm_client(model_name: str) -> Tuple[OpenAI, str]:
+        """Create an OpenAI-compatible client and resolve model id.
+
+        AppWorld uses the OpenAI Python client directly. For the NIKA-style GPT-OSS 120B
+        backend, we route requests to the configured base URL and translate the friendly
+        backend name (e.g. 'gpt-oss-120b') to the actual served model id.
+        """
+
+        if model_name.startswith("gpt-oss-120b"):
+            gpt_oss_api_url = os.getenv("GPT_OSS_API_URL")
+            gpt_oss_api_key = os.getenv("GPT_OSS_API_KEY")
+            if not gpt_oss_api_url or not gpt_oss_api_key:
+                raise ValueError(
+                    "GPT-OSS backend requested but GPT_OSS_API_URL/GPT_OSS_API_KEY are not set. "
+                    "Set them in your environment (or .env) and retry."
+                )
+
+            # Match cookbook/nika defaults: internal endpoint often uses self-signed cert.
+            # Default verify_ssl=False; allow overriding to True explicitly.
+            verify_ssl_raw = os.getenv("GPT_OSS_VERIFY_SSL")
+            verify_ssl = False
+            if verify_ssl_raw is not None:
+                verify_ssl = verify_ssl_raw.strip().lower() in {"1", "true", "yes", "y"}
+
+            resolved_model_name = os.getenv("GPT_OSS_MODEL_ID") or "kt-gpt-oss-rh014"
+
+            http_client = None
+            try:
+                import httpx  # openai depends on httpx; keep import local
+
+                http_client = httpx.Client(verify=verify_ssl, timeout=60.0)
+            except Exception:
+                # If httpx isn't importable for some reason, fall back to default client.
+                http_client = None
+
+            client_kwargs = {
+                "base_url": gpt_oss_api_url,
+                "api_key": gpt_oss_api_key,
+                "timeout": 180.0,
+                "max_retries": 2,
+            }
+            if http_client is not None:
+                client_kwargs["http_client"] = http_client
+
+            return OpenAI(**client_kwargs), resolved_model_name
+
+        # Default: use standard OpenAI client + model string as-is.
+        return OpenAI(timeout=180.0, max_retries=2), model_name
 
     def __init__(
         self,
         index: int,
         task_ids: List[str],
         experiment_name: str,
-        model_name: str = "gpt-5.2",  # Azure deployment name (without "azure/" prefix)
+        model_name: str = "qwen3-8b",
         temperature: float = 0.9,
         max_interactions: int = 30,
         max_response_size: int = 129024,
@@ -46,16 +94,12 @@ class AppworldReactAgent:
         utility_threshold: float = 0.5,
         memory_base_url: str = "http://0.0.0.0:8002/",
         memory_workspace_id: str = "appworld_v1",
-        # Azure OpenAI configuration
-        api_key: str | None = None,
-        api_base: str | None = None,
-        api_version: str | None = None,
     ):
 
         self.index: int = index
         self.task_ids: List[str] = task_ids
         self.experiment_name: str = experiment_name
-        self.model_name: str = model_name
+        self.backend_model_name: str = model_name
         self.temperature: float = temperature
         self.max_interactions: int = max_interactions
         self.max_response_size: int = max_response_size
@@ -69,17 +113,7 @@ class AppworldReactAgent:
         self.memory_base_url: str = memory_base_url
         self.memory_workspace_id: str = memory_workspace_id
 
-        # Azure OpenAI configuration
-        self.api_key: str | None = api_key or os.getenv("AZURE_LLM_API_KEY") or os.getenv("AZURE_API_KEY")
-        self.api_base: str | None = api_base or os.getenv("AZURE_LLM_API_BASE") or os.getenv("AZURE_API_BASE")
-        self.api_version: str | None = api_version or os.getenv("AZURE_LLM_API_VERSION") or os.getenv("AZURE_API_VERSION") or "2024-02-01"
-
-        # Initialize Azure OpenAI client
-        self.client = AzureOpenAI(
-            api_key=self.api_key,
-            api_version=self.api_version,
-            azure_endpoint=self.api_base,
-        )
+        self.llm_client, self.model_name = self._create_llm_client(model_name=model_name)
 
         self.history: List[List[List[dict]]] = [[] for _ in range(num_trials)]
         self.retrieved_memory_list: List[List[List[Any]]] = [[] for _ in range(num_trials)]
@@ -92,12 +126,21 @@ class AppworldReactAgent:
     def call_llm(self, messages: list) -> str:
         for i in range(100):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,  # Azure deployment name
-                    messages=messages,
-                    temperature=self.temperature,
-                    seed=0,
-                )
+                request_kwargs = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "temperature": self.temperature,
+                }
+
+                # Keep the default behavior for models that support these fields,
+                # but avoid sending them to the GPT-OSS backend (it may reject
+                # unknown OpenAI extensions).
+                if not self.backend_model_name.startswith("gpt-oss-120b"):
+                    request_kwargs["extra_body"] = {"enable_thinking": False}
+                    request_kwargs["seed"] = 0
+
+                response = self.llm_client.chat.completions.create(**request_kwargs)
+
                 return response.choices[0].message.content
 
             except Exception as e:
@@ -106,7 +149,8 @@ class AppworldReactAgent:
 
         return "call llm error"
 
-    def prompt_messages(self, run_id, task_index, previous_memories: None, world: AppWorld):
+    def prompt_messages(self, run_id, task_index, previous_memories: Optional[List[dict]], world: AppWorld):
+        previous_memories = previous_memories or []
         app_descriptions = json.dumps(
             [
                 {"name": k, "description": v}

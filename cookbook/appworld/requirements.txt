@@ -1,5 +1,0 @@
-jinja2
-openai>=1.0.0
-loguru
-ray
-pandas

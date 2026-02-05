@@ -1,12 +1,11 @@
 # flake8: noqa: E402
+import argparse
 import os
 import time
-import argparse
 
 import ray
 import requests
 from ray import logger
-from tqdm import tqdm
 
 os.environ["APPWORLD_ROOT"] = "."
 from dotenv import load_dotenv
@@ -19,6 +18,50 @@ from pathlib import Path
 from appworld import load_task_ids
 
 from appworld_react_agent import AppworldReactAgent
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run AppWorld ReAct agent benchmark")
+
+    parser.add_argument(
+        "--mode",
+        default="w_mem_warm",
+        choices=["wo_mem", "w_mem_cold", "w_mem_warm"],
+        help="Benchmark mode: wo_mem (no memory), w_mem_cold (delete+load), w_mem_warm (reuse workspace)",
+    )
+
+    parser.add_argument("--backend-model", default="gpt-oss-120b", help="LLM backend model name")
+    parser.add_argument("--dataset-name", default="test_normal", help="AppWorld dataset name")
+    parser.add_argument(
+        "--experiment-name",
+        default=None,
+        help="Output experiment name (jsonl file stem). Default: derived from dataset/mode.",
+    )
+
+    # Memory benchmarks must run sequentially to avoid cross-task interference.
+    parser.add_argument("--max-workers", type=int, default=1)
+    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--num-runs", type=int, default=1)
+    parser.add_argument("--num-trials", type=int, default=2)
+
+    parser.add_argument("--use-memory-addition", action="store_true", default=True)
+    parser.add_argument("--no-use-memory-addition", action="store_false", dest="use_memory_addition")
+    parser.add_argument("--use-memory-deletion", action="store_true", default=True)
+    parser.add_argument("--no-use-memory-deletion", action="store_false", dest="use_memory_deletion")
+
+    parser.add_argument("--delete-freq", type=int, default=5)
+    parser.add_argument("--freq-threshold", type=int, default=5)
+    parser.add_argument("--utility-threshold", type=float, default=0.5)
+
+    parser.add_argument("--memory-workspace-id", default="appworld")
+    parser.add_argument("--memory-api-url", default="http://0.0.0.0:8002/")
+    parser.add_argument(
+        "--starting-memory-path",
+        default="docs/library",
+        help="Vector-store side path used by /vector_store load action (only for cold start)",
+    )
+
+    return parser
 
 
 def handle_api_response(response: requests.Response):
@@ -81,7 +124,7 @@ def load_memory(workspace_id: str, path: str = "docs/library", api_url: str = "h
 def run_agent(
     model_name: str,
     dataset_name: str,
-    experiment_suffix: str,
+    experiment_name: str,
     max_workers: int,
     num_trials: int = 1,
     use_memory: bool = False,
@@ -92,13 +135,8 @@ def run_agent(
     utility_threshold: float = 0.5,
     workspace_id: str = "appworld_v1",
     api_url: str = "http://0.0.0.0:8002/",
-    batch_size: int = 4,
-    # Azure OpenAI configuration
-    llm_api_key: str | None = None,
-    llm_api_base: str | None = None,
-    llm_api_version: str | None = None,
+    batch_size: int = 4
 ):
-    experiment_name = dataset_name + "_" + experiment_suffix
     path: Path = Path(f"./exp_result/{model_name}")
     path.mkdir(parents=True, exist_ok=True)
 
@@ -110,18 +148,12 @@ def run_agent(
             for x in result:
                 f.write(json.dumps(x) + "\n")
 
-    # Track statistics for progress bar
-    success_count = 0
-    total_trials_used = 0
-
     if max_workers > 1:
         # Process tasks in batches
         total_tasks = len(task_ids)
         num_batches = (total_tasks + batch_size - 1) // batch_size  # Ceiling division
 
         logger.info(f"Total tasks: {total_tasks}, Batch size: {batch_size}, Number of batches: {num_batches}")
-
-        pbar = tqdm(total=total_tasks, desc="Tasks", unit="task")
 
         for batch_idx in range(num_batches):
             # Initialize Ray for this batch
@@ -134,9 +166,11 @@ def run_agent(
             # Initialize Ray with the number of CPUs needed for this batch
             ray.init(num_cpus=len(batch_task_ids))
 
+            RemoteAppworldReactAgent = ray.remote(AppworldReactAgent)
+
             future_list: list = []
             for i, task_id in enumerate(batch_task_ids):
-                actor = AppworldReactAgent.remote(
+                actor = RemoteAppworldReactAgent.remote(
                     index=start_idx+i,
                     model_name=model_name,
                     task_ids=[task_id],
@@ -150,10 +184,6 @@ def run_agent(
                     utility_threshold=utility_threshold,
                     memory_workspace_id=workspace_id,
                     memory_base_url=api_url,
-                    # Azure OpenAI configuration
-                    api_key=llm_api_key,
-                    api_base=llm_api_base,
-                    api_version=llm_api_version,
                 )
                 future = actor.execute.remote()
                 future_list.append(future)
@@ -168,27 +198,12 @@ def run_agent(
                     if t_result:
                         if isinstance(t_result, list):
                             result.extend(t_result)
-                            # Update statistics from the last trial result
-                            last_result = t_result[-1] if t_result else None
-                            if last_result:
-                                trials_used = last_result.get("run_id", 0) + 1
-                                total_trials_used += trials_used
-                                if last_result.get("after_score", 0) == 1:
-                                    success_count += 1
                         else:
                             result.append(t_result)
-                            trials_used = t_result.get("run_id", 0) + 1
-                            total_trials_used += trials_used
-                            if t_result.get("after_score", 0) == 1:
-                                success_count += 1
                 except Exception as e:
                     logger.exception(f"run ray error with task_id={task_id}")
 
-                pbar.update(1)
-                pbar.set_postfix({
-                    "success": f"{success_count}/{pbar.n}",
-                    "avg_trials": f"{total_trials_used/pbar.n:.1f}/{num_trials}"
-                })
+                logger.info(f"Batch {batch_idx + 1}: task {i + 1}/{len(batch_task_ids)} complete")
 
             # Shutdown Ray to free resources before next batch
             ray.shutdown()
@@ -198,14 +213,11 @@ def run_agent(
             if batch_idx < num_batches - 1:
                 time.sleep(2)
 
-        pbar.close()
         dump_file()
 
     else:
-        # Single worker mode - still use Ray for consistency
-        pbar = tqdm(task_ids, desc="Tasks", unit="task")
-        for index, task_id in enumerate(pbar):
-            actor = AppworldReactAgent.remote(
+        for index, task_id in enumerate(task_ids):
+            agent = AppworldReactAgent(
                 index=index,
                 model_name=model_name,
                 task_ids=[task_id],
@@ -219,94 +231,66 @@ def run_agent(
                 utility_threshold=utility_threshold,
                 memory_workspace_id=workspace_id,
                 memory_base_url=api_url,
-                # Azure OpenAI configuration
-                api_key=llm_api_key,
-                api_base=llm_api_base,
-                api_version=llm_api_version,
             )
-            task_results = ray.get(actor.execute.remote())
+            task_results = agent.execute()
             if isinstance(task_results, list):
                 result.extend(task_results)
-                # Update statistics from the last trial result
-                last_result = task_results[-1] if task_results else None
-                if last_result:
-                    trials_used = last_result.get("run_id", 0) + 1
-                    total_trials_used += trials_used
-                    if last_result.get("after_score", 0) == 1:
-                        success_count += 1
             else:
                 result.append(task_results)
-                trials_used = task_results.get("run_id", 0) + 1
-                total_trials_used += trials_used
-                if task_results.get("after_score", 0) == 1:
-                    success_count += 1
-
-            pbar.set_postfix({
-                "success": f"{success_count}/{index+1}",
-                "avg_trials": f"{total_trials_used/(index+1):.1f}/{num_trials}"
-            })
-
-        pbar.close()
         dump_file()
 
 def main():
-    parser = argparse.ArgumentParser(description="Run AppWorld experiments with ReMe memory")
-    parser.add_argument("--use-memory", action="store_true", help="Enable ReMe memory system")
-    parser.add_argument("--max-workers", type=int, default=1, help="Number of workers")
-    parser.add_argument("--num-runs", type=int, default=1, help="Number of runs")
-    parser.add_argument("--batch-size", type=int, default=1, help="Number of concurrent tasks per batch")
-    parser.add_argument("--num-trials", type=int, default=2, help="Number of trials per task")
-    parser.add_argument("--dataset-name", type=str, default="test_normal", help="Dataset name")
+    parser = _build_arg_parser()
     args = parser.parse_args()
 
-    max_workers = args.max_workers
-    num_runs = args.num_runs
-    batch_size = args.batch_size
-    num_trials = args.num_trials
+    if args.mode == "wo_mem":
+        use_memory = False
+        delete_workspace_first = False
+        load_starting_memory = False
+    elif args.mode == "w_mem_cold":
+        use_memory = True
+        delete_workspace_first = True
+        load_starting_memory = True
+    elif args.mode == "w_mem_warm":
+        use_memory = True
+        delete_workspace_first = False
+        load_starting_memory = False
+    else:
+        raise ValueError(f"Unsupported mode: {args.mode}")
 
-    # Azure OpenAI model configuration (read from environment variables)
-    model_name = os.getenv("AZURE_LLM_DEPLOYMENT_NAME", "gpt-5.2")
-    llm_api_base = os.getenv("AZURE_LLM_API_BASE")
-    llm_api_version = os.getenv("AZURE_LLM_API_VERSION", "2024-02-01")
-    # API key is read from environment variable: AZURE_LLM_API_KEY or AZURE_API_KEY
+    experiment_name = args.experiment_name
+    if not experiment_name:
+        experiment_name = f"{args.dataset_name}_{args.mode}"
 
-    use_memory = args.use_memory
-    use_memory_addition = args.use_memory
-    use_memory_deletion = args.use_memory
-    workspace_id = "appworld"
-    api_url = "http://0.0.0.0:8002/"
-
-    experiment_suffix = "with-memory" if use_memory else "without-memory"
-
-    if use_memory:
-        # Clean up workspace before starting
+    if use_memory and delete_workspace_first:
         logger.info("Deleting workspace...")
-        delete_workspace(workspace_id=workspace_id, api_url=api_url)
+        delete_workspace(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
         time.sleep(5)
 
-        # First run to build task memories
-        logger.info("Start load experiments to build task memories")
-        load_memory(workspace_id=workspace_id, api_url=api_url)
+    if use_memory and load_starting_memory:
+        logger.info("Loading starting memories...")
+        load_memory(
+            workspace_id=args.memory_workspace_id,
+            path=args.starting_memory_path,
+            api_url=args.memory_api_url,
+        )
 
-    for i in range(num_runs):
+    for _ in range(args.num_runs):
         run_agent(
-            model_name=model_name,
+            model_name=args.backend_model,
             dataset_name=args.dataset_name,
-            experiment_suffix=experiment_suffix,
-            max_workers=max_workers,
-            num_trials=num_trials,
+            experiment_name=experiment_name,
+            max_workers=args.max_workers,
+            num_trials=args.num_trials,
             use_memory=use_memory,
-            use_memory_addition=use_memory_addition,
-            use_memory_deletion=use_memory_deletion,
-            delete_freq=5,
-            freq_threshold=5,
-            utility_threshold=0.5,
-            workspace_id=workspace_id,
-            api_url=api_url,
-            batch_size=batch_size,
-            # Azure OpenAI configuration
-            llm_api_base=llm_api_base,
-            llm_api_version=llm_api_version,
+            use_memory_addition=args.use_memory_addition if use_memory else False,
+            use_memory_deletion=args.use_memory_deletion if use_memory else False,
+            delete_freq=args.delete_freq,
+            freq_threshold=args.freq_threshold,
+            utility_threshold=args.utility_threshold,
+            workspace_id=args.memory_workspace_id,
+            api_url=args.memory_api_url,
+            batch_size=args.batch_size,
         )
 
 if __name__ == "__main__":

@@ -1,0 +1,16 @@
+jinja2
+loguru
+openai
+python-dotenv
+ray
+pandas
+requests
+tqdm
+httpx
+
+# appworld CLI currently breaks with click>=8.2 (TypeError: secondary flag for non-boolean).
+# Keep typer within appworld's declared range and pin click to a known-good version.
+click==8.1.7
+
+# Provides `from appworld import AppWorld, load_task_ids`
+appworld==0.1.3
