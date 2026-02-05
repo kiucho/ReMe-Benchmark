@@ -1,0 +1,1 @@
+{"is_anomaly": true, "faulty_devices": ["leaf_1", "leaf_2", "spine_1"], "root_cause_name": ["flow_rule_shadowing", "flow_rule_loop"]}

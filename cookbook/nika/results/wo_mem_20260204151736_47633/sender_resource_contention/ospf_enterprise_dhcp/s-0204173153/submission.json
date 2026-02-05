@@ -1,0 +1,1 @@
+{"is_anomaly": true, "faulty_devices": ["distribution_router", "core_router"], "root_cause_name": ["OSPF Misconfiguration"]}

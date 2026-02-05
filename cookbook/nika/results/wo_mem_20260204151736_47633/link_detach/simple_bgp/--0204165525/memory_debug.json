@@ -1,0 +1,8 @@
+{
+  "use_memory": false,
+  "original_task_description": "You are provided with the following network description and its current state:\nNetwork Description: A simple BGP network with two routers and two hosts.\nHosts: pc1, pc2\nRouters (FRRRouting): router1, router2\nTopology: (router1:eth0, router2:eth0), (router1:eth1, pc1:eth0), (router2:eth1, pc2:eth0)\n\nYour goal is to analyze the network condition and, if needed, use the available tools.\nYou need to generate a troubeshooting diagnosis report.\nThe report should reflect your assessment of the network's health, indicate any abnormal behavior you identify, and describe relevant findings based on your analysis.\n\nFocus on producing an informative and coherent diagnostic report derived from the network state.\nDo not need to propose any solutions or remediation steps at this stage.",
+  "memory_response": null,
+  "retrieved_memory_list": [],
+  "previous_memories": null,
+  "enriched_task_description": "You are provided with the following network description and its current state:\nNetwork Description: A simple BGP network with two routers and two hosts.\nHosts: pc1, pc2\nRouters (FRRRouting): router1, router2\nTopology: (router1:eth0, router2:eth0), (router1:eth1, pc1:eth0), (router2:eth1, pc2:eth0)\n\nYour goal is to analyze the network condition and, if needed, use the available tools.\nYou need to generate a troubeshooting diagnosis report.\nThe report should reflect your assessment of the network's health, indicate any abnormal behavior you identify, and describe relevant findings based on your analysis.\n\nFocus on producing an informative and coherent diagnostic report derived from the network state.\nDo not need to propose any solutions or remediation steps at this stage."
+}

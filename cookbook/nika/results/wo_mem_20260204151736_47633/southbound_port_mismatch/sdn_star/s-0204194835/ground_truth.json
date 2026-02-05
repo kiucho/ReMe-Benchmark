@@ -1,0 +1,9 @@
+{
+    "is_anomaly": true,
+    "faulty_devices": [
+        "controller"
+    ],
+    "root_cause_name": [
+        "southbound_port_mismatch"
+    ]
+}

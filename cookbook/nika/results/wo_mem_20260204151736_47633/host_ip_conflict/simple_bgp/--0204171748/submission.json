@@ -1,0 +1,1 @@
+{"is_anomaly": true, "faulty_devices": ["pc1", "pc2", "router1", "router2"], "root_cause_name": ["IP Address Conflict", "FRR Routing Software Issue"]}

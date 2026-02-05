@@ -1,0 +1,1 @@
+{"is_anomaly": true, "faulty_devices": ["Host_1", "Host_5"], "root_cause_name": ["host_incorrect_ip"]}

@@ -1,0 +1,1 @@
+{"is_anomaly": true, "faulty_devices": ["switch_access_1_1_1", "switch_access_2_1_1", "router_dist_1_1", "router_dist_2_1"], "root_cause_name": ["dhcp_missing_subnet", "host_missing_ip"]}

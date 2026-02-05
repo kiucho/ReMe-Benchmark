@@ -1,0 +1,9 @@
+{
+    "is_anomaly": true,
+    "faulty_devices": [
+        "host_1_1_1_1"
+    ],
+    "root_cause_name": [
+        "arp_cache_poisoning"
+    ]
+}
