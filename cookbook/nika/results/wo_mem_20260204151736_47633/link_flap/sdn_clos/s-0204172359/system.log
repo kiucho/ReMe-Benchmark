@@ -1,0 +1,12 @@
+2026-02-04 17:23:59 [INFO] SystemLogger: Started network environment: sdn_clos with size s in session 0204172359 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 17:23:59 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 17:24:00 [INFO] SystemLogger: Injected link flap on host_1_1:eth0 (down_time=1, up_time=1)
+2026-02-04 17:24:00 [INFO] SystemLogger: Session 0204172359, injected problem(s): ['link_flap'] under sdn_clos.
+2026-02-04 17:24:00 [INFO] SystemLogger: Ground truth saved for session ID: 0204172359
+2026-02-04 17:24:00 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204172359
+2026-02-04 17:24:00 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 17:24:02 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/link_flap/sdn_clos/s-0204172359/memory_debug.json
+2026-02-04 17:24:35 [INFO] SystemLogger: Agent run completed for session ID: 0204172359
+2026-02-04 17:24:35 [INFO] SystemLogger: Evaluating session 0204172359 using LLM-as-Judge.
+2026-02-04 17:24:51 [INFO] SystemLogger: All Done! LLM Judge Score: 2, Detection Score: 0.0, Localization - Acc: 0.0, RCA - Acc: 0.0.
+2026-02-04 17:24:51 [INFO] SystemLogger: Destroyed network environment: sdn_clos with session ID: 0204172359

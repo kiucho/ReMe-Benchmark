@@ -1,0 +1,12 @@
+2026-02-04 18:12:33 [INFO] SystemLogger: Started network environment: ospf_enterprise_dhcp with size s in session 0204181233 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 18:12:33 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 18:12:34 [INFO] SystemLogger: Injected ARP misconfiguration on host_1_1_1_1 for IP None with fake MAC 00:11:22:33:44:55.
+2026-02-04 18:12:34 [INFO] SystemLogger: Session 0204181233, injected problem(s): ['arp_cache_poisoning'] under ospf_enterprise_dhcp.
+2026-02-04 18:12:34 [INFO] SystemLogger: Ground truth saved for session ID: 0204181233
+2026-02-04 18:12:34 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204181233
+2026-02-04 18:12:34 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 18:12:36 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/arp_cache_poisoning/ospf_enterprise_dhcp/s-0204181233/memory_debug.json
+2026-02-04 18:13:37 [INFO] SystemLogger: Agent run completed for session ID: 0204181233
+2026-02-04 18:13:37 [INFO] SystemLogger: Evaluating session 0204181233 using LLM-as-Judge.
+2026-02-04 18:13:57 [INFO] SystemLogger: All Done! LLM Judge Score: 2, Detection Score: 1.0, Localization - Acc: 0.0, RCA - Acc: 0.0.
+2026-02-04 18:13:58 [INFO] SystemLogger: Destroyed network environment: ospf_enterprise_dhcp with session ID: 0204181233

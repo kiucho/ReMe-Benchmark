@@ -1,0 +1,12 @@
+2026-02-04 17:17:48 [INFO] SystemLogger: Started network environment: simple_bgp with size - in session 0204171748 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 17:17:48 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 17:17:48 [INFO] SystemLogger: Injected IP change from 200.1.1.2/24 to 195.11.14.2/24 on pc2:eth0, default gateway changed to 195.11.14.1.
+2026-02-04 17:17:48 [INFO] SystemLogger: Session 0204171748, injected problem(s): ['host_ip_conflict'] under simple_bgp.
+2026-02-04 17:17:48 [INFO] SystemLogger: Ground truth saved for session ID: 0204171748
+2026-02-04 17:17:48 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204171748
+2026-02-04 17:17:48 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 17:17:50 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/host_ip_conflict/simple_bgp/--0204171748/memory_debug.json
+2026-02-04 17:18:59 [INFO] SystemLogger: Agent run completed for session ID: 0204171748
+2026-02-04 17:18:59 [INFO] SystemLogger: Evaluating session 0204171748 using LLM-as-Judge.
+2026-02-04 17:19:17 [INFO] SystemLogger: All Done! LLM Judge Score: 4, Detection Score: 1.0, Localization - Acc: 1.0, RCA - Acc: 0.0.
+2026-02-04 17:19:17 [INFO] SystemLogger: Destroyed network environment: simple_bgp with session ID: 0204171748

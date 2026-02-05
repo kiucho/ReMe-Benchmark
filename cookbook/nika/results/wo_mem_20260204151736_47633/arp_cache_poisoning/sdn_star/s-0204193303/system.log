@@ -1,0 +1,12 @@
+2026-02-04 19:33:03 [INFO] SystemLogger: Started network environment: sdn_star with size s in session 0204193303 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 19:33:03 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 19:33:03 [INFO] SystemLogger: Injected ARP misconfiguration on host_1 for IP None with fake MAC 00:11:22:33:44:55.
+2026-02-04 19:33:03 [INFO] SystemLogger: Session 0204193303, injected problem(s): ['arp_cache_poisoning'] under sdn_star.
+2026-02-04 19:33:03 [INFO] SystemLogger: Ground truth saved for session ID: 0204193303
+2026-02-04 19:33:03 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204193303
+2026-02-04 19:33:03 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 19:33:05 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/arp_cache_poisoning/sdn_star/s-0204193303/memory_debug.json
+2026-02-04 19:34:01 [INFO] SystemLogger: Agent run completed for session ID: 0204193303
+2026-02-04 19:34:01 [INFO] SystemLogger: Evaluating session 0204193303 using LLM-as-Judge.
+2026-02-04 19:34:27 [INFO] SystemLogger: All Done! LLM Judge Score: 2, Detection Score: 0.0, Localization - Acc: 0.0, RCA - Acc: 0.0.
+2026-02-04 19:34:27 [INFO] SystemLogger: Destroyed network environment: sdn_star with session ID: 0204193303

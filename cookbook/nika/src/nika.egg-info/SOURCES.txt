@@ -2,7 +2,9 @@ README.md
 pyproject.toml
 src/agent/__init__.py
 src/agent/react_agent.py
+src/agent/react_agent_on_demand.py
 src/agent/domain_agents/diagnosis_agent.py
+src/agent/domain_agents/diagnosis_agent_on_demand.py
 src/agent/domain_agents/submission_agent.py
 src/agent/llm/langchain_ollama.py
 src/agent/llm/model_factory.py
@@ -102,6 +104,7 @@ src/nika/service/mcp_server/task_mcp_server.py
 src/nika/utils/errors.py
 src/nika/utils/logger.py
 src/nika/utils/session.py
+src/nika/utils/template.py
 src/scripts/step1_net_env_start.py
 src/scripts/step2_failure_inject.py
 src/scripts/step3_agent_run.py

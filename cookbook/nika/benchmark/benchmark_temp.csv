@@ -1,2 +1,2 @@
 problem,scenario,topo_size
-link_bandwidth_throttling,dc_clos_service,m
+sender_application_delay,dc_clos_service,m

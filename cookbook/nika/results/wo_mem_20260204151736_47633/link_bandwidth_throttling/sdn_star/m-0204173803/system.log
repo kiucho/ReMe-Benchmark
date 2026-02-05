@@ -1,0 +1,13 @@
+2026-02-04 17:38:03 [INFO] SystemLogger: Started network environment: sdn_star with size m in session 0204173803 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 17:38:03 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 17:38:04 [INFO] SystemLogger: Injected bandwidth limit of 30kbitmbit with burst 64kb and limit 500kb on host_2:eth0
+2026-02-04 17:38:33 [INFO] SystemLogger: Started background traffic generation ['host_1_to_host_2', 'host_3_to_host_2', 'host_4_to_host_2', 'host_5_to_host_2', 'host_6_to_host_2', 'host_7_to_host_2', 'host_8_to_host_2'] to amplify the bandwidth throttling effect.
+2026-02-04 17:38:33 [INFO] SystemLogger: Session 0204173803, injected problem(s): ['link_bandwidth_throttling'] under sdn_star.
+2026-02-04 17:38:33 [INFO] SystemLogger: Ground truth saved for session ID: 0204173803
+2026-02-04 17:38:33 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204173803
+2026-02-04 17:38:33 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 17:38:35 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/link_bandwidth_throttling/sdn_star/m-0204173803/memory_debug.json
+2026-02-04 17:39:29 [INFO] SystemLogger: Agent run completed for session ID: 0204173803
+2026-02-04 17:39:29 [INFO] SystemLogger: Evaluating session 0204173803 using LLM-as-Judge.
+2026-02-04 17:39:53 [INFO] SystemLogger: All Done! LLM Judge Score: 2, Detection Score: 1.0, Localization - Acc: 0.0, RCA - Acc: 1.0.
+2026-02-04 17:39:53 [INFO] SystemLogger: Destroyed network environment: sdn_star with session ID: 0204173803

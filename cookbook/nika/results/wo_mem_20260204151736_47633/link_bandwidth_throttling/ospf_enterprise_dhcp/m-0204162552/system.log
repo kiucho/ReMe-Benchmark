@@ -1,0 +1,13 @@
+2026-02-04 16:25:52 [INFO] SystemLogger: Started network environment: ospf_enterprise_dhcp with size m in session 0204162552 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 16:25:52 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 16:25:53 [INFO] SystemLogger: Injected bandwidth limit of 30kbitmbit with burst 64kb and limit 500kb on host_1_1_2_2:eth0
+2026-02-04 16:26:25 [INFO] SystemLogger: Started background traffic generation ['host_1_1_1_1_to_host_1_1_2_2', 'host_1_1_1_2_to_host_1_1_2_2', 'host_1_1_2_1_to_host_1_1_2_2', 'host_1_2_1_1_to_host_1_1_2_2', 'host_1_2_1_2_to_host_1_1_2_2', 'host_1_2_2_1_to_host_1_1_2_2', 'host_1_2_2_2_to_host_1_1_2_2', 'host_2_1_1_1_to_host_1_1_2_2', 'host_2_1_1_2_to_host_1_1_2_2', 'host_2_1_2_1_to_host_1_1_2_2', 'host_2_1_2_2_to_host_1_1_2_2', 'host_2_2_1_1_to_host_1_1_2_2', 'host_2_2_1_2_to_host_1_1_2_2', 'host_2_2_2_1_to_host_1_1_2_2', 'host_2_2_2_2_to_host_1_1_2_2'] to amplify the bandwidth throttling effect.
+2026-02-04 16:26:25 [INFO] SystemLogger: Session 0204162552, injected problem(s): ['link_bandwidth_throttling'] under ospf_enterprise_dhcp.
+2026-02-04 16:26:25 [INFO] SystemLogger: Ground truth saved for session ID: 0204162552
+2026-02-04 16:26:25 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204162552
+2026-02-04 16:26:25 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 16:26:27 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/link_bandwidth_throttling/ospf_enterprise_dhcp/m-0204162552/memory_debug.json
+2026-02-04 16:27:18 [INFO] SystemLogger: Agent run completed for session ID: 0204162552
+2026-02-04 16:27:18 [INFO] SystemLogger: Evaluating session 0204162552 using LLM-as-Judge.
+2026-02-04 16:27:36 [INFO] SystemLogger: All Done! LLM Judge Score: 1, Detection Score: 1.0, Localization - Acc: 0.0, RCA - Acc: 0.0.
+2026-02-04 16:27:37 [INFO] SystemLogger: Destroyed network environment: ospf_enterprise_dhcp with session ID: 0204162552

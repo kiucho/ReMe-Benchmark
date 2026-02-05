@@ -1,0 +1,13 @@
+2026-02-04 18:48:37 [INFO] SystemLogger: Started network environment: sdn_clos with size m in session 0204184837 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 18:48:37 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 18:48:38 [INFO] SystemLogger: Injected fragmentation disabled on host_1_4 with MTU 10.
+2026-02-04 18:48:38 [INFO] SystemLogger: Session 0204184837, injected problem(s): ['link_fragmentation_disabled'] under sdn_clos.
+2026-02-04 18:48:38 [INFO] SystemLogger: Ground truth saved for session ID: 0204184837
+2026-02-04 18:48:38 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204184837
+2026-02-04 18:48:38 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 18:48:40 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/link_fragmentation_disabled/sdn_clos/m-0204184837/memory_debug.json
+2026-02-04 18:49:41 [INFO] SystemLogger: Agent run completed for session ID: 0204184837
+2026-02-04 18:49:41 [ERROR] SystemLogger: Submission file not found: /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/link_fragmentation_disabled/sdn_clos/m-0204184837/submission.json
+2026-02-04 18:49:41 [INFO] SystemLogger: Evaluating session 0204184837 using LLM-as-Judge.
+2026-02-04 18:50:02 [INFO] SystemLogger: All Done! LLM Judge Score: 2, Detection Score: -1.0, Localization - Acc: -1.0, RCA - Acc: -1.0.
+2026-02-04 18:50:03 [INFO] SystemLogger: Destroyed network environment: sdn_clos with session ID: 0204184837

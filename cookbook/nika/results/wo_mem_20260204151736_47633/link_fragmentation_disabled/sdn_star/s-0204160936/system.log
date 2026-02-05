@@ -1,0 +1,12 @@
+2026-02-04 16:09:36 [INFO] SystemLogger: Started network environment: sdn_star with size s in session 0204160936 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 16:09:36 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 16:09:36 [INFO] SystemLogger: Injected fragmentation disabled on host_1 with MTU 10.
+2026-02-04 16:09:36 [INFO] SystemLogger: Session 0204160936, injected problem(s): ['link_fragmentation_disabled'] under sdn_star.
+2026-02-04 16:09:36 [INFO] SystemLogger: Ground truth saved for session ID: 0204160936
+2026-02-04 16:09:36 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204160936
+2026-02-04 16:09:36 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 16:09:38 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/link_fragmentation_disabled/sdn_star/s-0204160936/memory_debug.json
+2026-02-04 16:10:44 [INFO] SystemLogger: Agent run completed for session ID: 0204160936
+2026-02-04 16:10:44 [INFO] SystemLogger: Evaluating session 0204160936 using LLM-as-Judge.
+2026-02-04 16:10:58 [INFO] SystemLogger: All Done! LLM Judge Score: 2, Detection Score: 1.0, Localization - Acc: 1.0, RCA - Acc: 0.0.
+2026-02-04 16:10:58 [INFO] SystemLogger: Destroyed network environment: sdn_star with session ID: 0204160936

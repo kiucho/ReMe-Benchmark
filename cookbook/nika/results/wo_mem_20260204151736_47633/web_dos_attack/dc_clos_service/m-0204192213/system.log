@@ -1,0 +1,12 @@
+2026-02-04 19:22:13 [INFO] SystemLogger: Started network environment: dc_clos_service with size m in session 0204192213 (experiment: wo_mem_20260204151736_47633)
+2026-02-04 19:22:13 [INFO] SystemLogger: Using user-specified seed: 42
+2026-02-04 19:22:16 [INFO] SystemLogger: Started AB attack from client_1 to 10.1.3.2
+2026-02-04 19:22:16 [INFO] SystemLogger: Session 0204192213, injected problem(s): ['web_dos_attack'] under dc_clos_service.
+2026-02-04 19:22:16 [INFO] SystemLogger: Ground truth saved for session ID: 0204192213
+2026-02-04 19:22:16 [INFO] SystemLogger: Starting agent: react with backend gpt-oss-120b in session 0204192213
+2026-02-04 19:22:16 [WARNING] SystemLogger: Authentication to Langfuse failed. Please check your LANGFUSE_API_KEY.
+2026-02-04 19:22:18 [INFO] SystemLogger: Memory debug info saved to /home/deeplearningengineering1/dev/ReMe-Benchmark/cookbook/nika/results/wo_mem_20260204151736_47633/web_dos_attack/dc_clos_service/m-0204192213/memory_debug.json
+2026-02-04 19:23:12 [INFO] SystemLogger: Agent run completed for session ID: 0204192213
+2026-02-04 19:23:12 [INFO] SystemLogger: Evaluating session 0204192213 using LLM-as-Judge.
+2026-02-04 19:23:28 [INFO] SystemLogger: All Done! LLM Judge Score: 1, Detection Score: 1.0, Localization - Acc: 1.0, RCA - Acc: 0.0.
+2026-02-04 19:23:29 [INFO] SystemLogger: Destroyed network environment: dc_clos_service with session ID: 0204192213
