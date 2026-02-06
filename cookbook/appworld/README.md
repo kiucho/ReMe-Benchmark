@@ -74,8 +74,8 @@ cd cookbook/appworld
 
 Mode definitions:
 - `wo_mem`: no memory calls
-- `w_mem_cold`: delete workspace + load starting memories, then run
-- `w_mem_warm`: reuse existing workspace; do not delete/load starting memories
+- `w_mem_cold`: load starting memories, then run (this script also deletes the workspace first for a clean start)
+- `w_mem_warm`: do not load starting memories; run using the existing workspace as-is
 
 ## Common arguments
 

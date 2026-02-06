@@ -27,7 +27,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         "--mode",
         default="w_mem_warm",
         choices=["wo_mem", "w_mem_cold", "w_mem_warm"],
-        help="Benchmark mode: wo_mem (no memory), w_mem_cold (delete+load), w_mem_warm (reuse workspace)",
+        help=(
+            "Benchmark mode: wo_mem (no memory), w_mem_cold (load starting memories then run), "
+            "w_mem_warm (do not load starting memories; use existing workspace as-is)"
+        ),
     )
 
     parser.add_argument("--backend-model", default="gpt-oss-120b", help="LLM backend model name")
@@ -48,6 +51,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-use-memory-addition", action="store_false", dest="use_memory_addition")
     parser.add_argument("--use-memory-deletion", action="store_true", default=True)
     parser.add_argument("--no-use-memory-deletion", action="store_false", dest="use_memory_deletion")
+
+    parser.add_argument("--rewrite-on-failure", action="store_true", default=True)
+    parser.add_argument("--no-rewrite-on-failure", action="store_false", dest="rewrite_on_failure")
 
     parser.add_argument("--delete-freq", type=int, default=5)
     parser.add_argument("--freq-threshold", type=int, default=5)
@@ -130,6 +136,7 @@ def run_agent(
     use_memory: bool = False,
     use_memory_addition: bool = False,
     use_memory_deletion: bool = False,
+    rewrite_on_failure: bool = True,
     delete_freq: int = 10,
     freq_threshold: int = 5,
     utility_threshold: float = 0.5,
@@ -179,6 +186,7 @@ def run_agent(
                     use_memory=use_memory,
                     use_memory_addition=use_memory_addition,
                     use_memory_deletion=use_memory_deletion,
+                    rewrite_on_failure=rewrite_on_failure,
                     delete_freq=delete_freq,
                     freq_threshold=freq_threshold,
                     utility_threshold=utility_threshold,
@@ -226,6 +234,7 @@ def run_agent(
                 use_memory=use_memory,
                 use_memory_addition=use_memory_addition,
                 use_memory_deletion=use_memory_deletion,
+                rewrite_on_failure=rewrite_on_failure,
                 delete_freq=delete_freq,
                 freq_threshold=freq_threshold,
                 utility_threshold=utility_threshold,
@@ -285,6 +294,7 @@ def main():
             use_memory=use_memory,
             use_memory_addition=args.use_memory_addition if use_memory else False,
             use_memory_deletion=args.use_memory_deletion if use_memory else False,
+            rewrite_on_failure=args.rewrite_on_failure if use_memory else False,
             delete_freq=args.delete_freq,
             freq_threshold=args.freq_threshold,
             utility_threshold=args.utility_threshold,

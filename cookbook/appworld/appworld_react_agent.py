@@ -94,6 +94,7 @@ class AppworldReactAgent:
         utility_threshold: float = 0.5,
         memory_base_url: str = "http://0.0.0.0:8002/",
         memory_workspace_id: str = "appworld_v1",
+        rewrite_on_failure: bool = True,
     ):
 
         self.index: int = index
@@ -112,6 +113,7 @@ class AppworldReactAgent:
         self.utility_threshold: float = utility_threshold
         self.memory_base_url: str = memory_base_url
         self.memory_workspace_id: str = memory_workspace_id
+        self.rewrite_on_failure: bool = rewrite_on_failure
 
         self.llm_client, self.model_name = self._create_llm_client(model_name=model_name)
 
@@ -170,13 +172,23 @@ class AppworldReactAgent:
                     logger.info(f"loaded task_memory: {task_memory}")
                     query = "Task:\n" + query + "\n\nSome Related Experience to help you to complete the task:\n" + re.sub(r'(?i)\bMemory\s*(\d+)\s*[:]', r'Experience \1:', task_memory)
             else:
+                # Retry scenario: use memories extracted from previous failed attempts.
+                # Prefer a compact block (especially when it contains a single rewritten_context).
                 formatted_memories = []
-                for i, memory in enumerate(previous_memories, 1):
-                    condition = memory["when_to_use"]
-                    memory_content = memory["content"]
-                    memory_text = f"Experience {i}:\n When to use: {condition}\n Content: {memory_content}\n"
-                    formatted_memories.append(memory_text)
-                query = "Task:\n" + query + "\n\nSome Related Experience to help you to complete the task:\n" + "\n".join(formatted_memories)
+                for memory in previous_memories:
+                    if not isinstance(memory, dict):
+                        continue
+                    memory_content = memory.get("content", "")
+                    if isinstance(memory_content, str) and memory_content.strip():
+                        formatted_memories.append(memory_content.strip())
+
+                if formatted_memories:
+                    query = (
+                        "Task:\n"
+                        + query
+                        + "\n\nSome Related Experience to help you to complete the task:\n"
+                        + "\n".join(formatted_memories)
+                    )
         messages = [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": query}
@@ -256,9 +268,28 @@ class AppworldReactAgent:
                     if self.use_memory:
                         if self.use_memory_addition:
                             new_traj_list = [self.get_traj_from_task_history(task_id, self.history[run_id][task_index], after_score)]
-                            previous_memories = self.add_memory(new_traj_list)
-                            if after_score != 1:
-                                self.delete_memory_by_ids([mem["memory_id"] for mem in previous_memories])
+                            should_rewrite = self.rewrite_on_failure and after_score != 1
+                            created_memories, rewritten_context = self.add_memory(
+                                new_traj_list,
+                                query=world.task.instruction,
+                                rewrite=should_rewrite,
+                            )
+
+                            # For retry experiments, avoid polluting the workspace with low-quality memories.
+                            if after_score != 1 and created_memories:
+                                delete_ids = [
+                                    mem.get("memory_id")
+                                    for mem in created_memories
+                                    if isinstance(mem, dict) and mem.get("memory_id")
+                                ]
+                                if delete_ids:
+                                    self.delete_memory_by_ids(delete_ids)
+
+                            # Next trial: prefer rewritten guidance when available.
+                            if after_score != 1 and isinstance(rewritten_context, str) and rewritten_context.strip():
+                                previous_memories = [{"content": rewritten_context.strip()}]
+                            else:
+                                previous_memories = created_memories
 
                         # update the freq & utility attributes of retrieved memories
                         update_utility: bool = after_score == 1
@@ -320,25 +351,41 @@ class AppworldReactAgent:
             "score": reward
         }
 
-    def add_memory(self, trajectories):
-        """Generate a summary of conversation messages and create task memories"""
+    def add_memory(self, trajectories, *, query: Optional[str] = None, rewrite: bool = False):
+        """Generate task memories from trajectories.
+
+        - rewrite=False: calls `summary_task_memory` and returns (memory_list, "").
+        - rewrite=True: calls `summary_task_memory_rewrite` (requires query) and returns
+          (memory_list, rewritten_context) where rewritten_context comes from response `answer`.
+        """
+
+        endpoint = "summary_task_memory_rewrite" if rewrite else "summary_task_memory"
+        payload = {
+            "workspace_id": self.memory_workspace_id,
+            "trajectories": trajectories,
+        }
+        if rewrite:
+            if not query:
+                raise ValueError("query is required when rewrite=True")
+            payload["query"] = query
 
         response = requests.post(
-            url=f"{self.memory_base_url}summary_task_memory",
-            json={
-                "workspace_id": self.memory_workspace_id,
-                "trajectories": trajectories,
-            },
+            url=f"{self.memory_base_url}{endpoint}",
+            json=payload,
         )
 
         result = self.handle_api_response(response)
         if not result:
-            return []
+            return [], ""
 
         # Extract memory list from response
         memory_list = result.get("metadata", {}).get("memory_list", [])
+        rewritten_context = ""
+        if rewrite:
+            rewritten_context = result.get("answer", "") or ""
+
         print(f"Task memory list created: {len(memory_list)} memories")
-        return memory_list
+        return memory_list, rewritten_context
 
     def delete_memory_by_ids(self, memory_ids):
         response = requests.post(
