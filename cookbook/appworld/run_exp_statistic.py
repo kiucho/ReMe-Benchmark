@@ -1,3 +1,4 @@
+import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -20,7 +21,9 @@ def calculate_best_at_k(scores: list, k: int) -> float:
         best@k value
     """
     if len(scores) % k != 0:
-        raise ValueError(f"Length of scores ({len(scores)}) must be divisible by k ({k})")
+        raise ValueError(
+            f"Length of scores ({len(scores)}) must be divisible by k ({k})"
+        )
 
     group_maxs = []
     for i in range(0, len(scores), k):
@@ -32,7 +35,9 @@ def calculate_best_at_k(scores: list, k: int) -> float:
 
 def calculate_pass_at_k(scores: list, k: int) -> float:
     if len(scores) % k != 0:
-        raise ValueError(f"Length of scores ({len(scores)}) must be divisible by k ({k})")
+        raise ValueError(
+            f"Length of scores ({len(scores)}) must be divisible by k ({k})"
+        )
 
     group_maxs = []
     for i in range(0, len(scores), k):
@@ -60,13 +65,74 @@ def get_possible_k_values(total_runs: int) -> list:
     return sorted(k_values, reverse=True)  # Sort from large to small
 
 
-def run_exp_statistic():
-    path: Path = Path("./exp_result")
+def _build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Summarize AppWorld experiment JSONL results"
+    )
+    parser.add_argument(
+        "--model-name",
+        default=None,
+        help="Model directory name under exp_result (e.g., gpt-oss-120b)",
+    )
+    parser.add_argument(
+        "--experiment-name",
+        default=None,
+        help="Experiment file stem without extension (e.g., test_normal_wo_mem)",
+    )
+    parser.add_argument(
+        "--exp-root",
+        default="./exp_result",
+        help="Root experiment directory containing model subdirectories",
+    )
+    return parser
+
+
+def _collect_result_files(
+    path: Path, model_name: str | None, experiment_name: str | None
+) -> list[Path]:
+    if model_name and experiment_name:
+        return [path / model_name / f"{experiment_name}.jsonl"]
+
+    if model_name:
+        return sorted((path / model_name).glob("*.jsonl"))
+
+    if experiment_name:
+        return sorted(path.glob(f"*/{experiment_name}.jsonl"))
+
+    # Default: support both old and current layouts
+    top_level = list(path.glob("*.jsonl"))
+    nested = list(path.glob("*/*.jsonl"))
+    return sorted(top_level + nested)
+
+
+def run_exp_statistic(
+    model_name: str | None = None,
+    experiment_name: str | None = None,
+    exp_root: str = "./exp_result",
+):
+    path: Path = Path(exp_root)
 
     # Store results for all experiments
     all_results = {}
 
-    for file in [f for f in path.glob("*.jsonl") if not f.stem[-1].isdigit()]:
+    target_files = _collect_result_files(
+        path=path, model_name=model_name, experiment_name=experiment_name
+    )
+
+    if not target_files:
+        logger.warning("No matching result files found for given arguments")
+
+    if model_name and not (path / model_name).exists():
+        logger.warning(f"Model directory not found: {path / model_name}")
+
+    if model_name and experiment_name and not target_files[0].exists():
+        logger.warning(f"Experiment file not found: {target_files[0]}")
+
+    for file in target_files:
+        if not file.exists():
+            logger.warning(f"File not found: {file}")
+            continue
+
         # Group results by task_id
         task_results = defaultdict(list)
 
@@ -93,7 +159,9 @@ def run_exp_statistic():
         # Check if each task has consistent number of runs
         run_counts = [len(scores) for scores in task_results.values()]
         if len(set(run_counts)) > 1:
-            logger.warning(f"Inconsistent number of runs for different tasks in file {file}: {set(run_counts)}")
+            logger.warning(
+                f"Inconsistent number of runs for different tasks in file {file}: {set(run_counts)}"
+            )
             continue
 
         num_runs = run_counts[0]
@@ -104,7 +172,7 @@ def run_exp_statistic():
         logger.info(f"Calculable best@k values: {k_values}")
 
         # Calculate various best@k values
-        file_results = {"file": file.name}
+        file_results: dict[str, str | float] = {"file": file.name}
 
         for k in k_values:
             best_at_k_scores = []
@@ -149,7 +217,18 @@ def run_exp_statistic():
         print("=" * 80)
 
         # Save table to CSV
-        output_path = path / "experiment_summary.csv"
+        if model_name:
+            output_dir = path / model_name
+        else:
+            output_dir = path
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if experiment_name:
+            output_name = f"experiment_summary_{experiment_name}.csv"
+        else:
+            output_name = "experiment_summary.csv"
+
+        output_path = output_dir / output_name
         df.to_csv(output_path)
         logger.info(f"Results table saved to: {output_path}")
     else:
@@ -157,4 +236,9 @@ def run_exp_statistic():
 
 
 if __name__ == "__main__":
-    run_exp_statistic()
+    args = _build_arg_parser().parse_args()
+    run_exp_statistic(
+        model_name=args.model_name,
+        experiment_name=args.experiment_name,
+        exp_root=args.exp_root,
+    )
