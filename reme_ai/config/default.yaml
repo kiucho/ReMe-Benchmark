@@ -267,6 +267,7 @@ llm:
   default:
     backend: openai
     model_name: kt-gpt-oss-rh014
+    temperature: 0
     token_count:
       backend: openai
       model_name: gpt-4o  # Use a similar model for token counting
@@ -392,6 +393,7 @@ llm:
   kora_gpt-oss-120b:
     backend: openai
     model_name: kt-gpt-oss-rh014
+    temperature: 0
     token_count:
       backend: openai
       model_name: gpt-4o  # Use a similar model for token counting

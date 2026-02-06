@@ -16,6 +16,7 @@ llm:
   default:
     backend: openai
     model_name: gpt-oss-120b
+    temperature: 0
 
   qwen3_max_instruct:
     backend: openai

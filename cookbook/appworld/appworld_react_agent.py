@@ -82,7 +82,7 @@ class AppworldReactAgent:
         task_ids: List[str],
         experiment_name: str,
         model_name: str = "qwen3-8b",
-        temperature: float = 0.9,
+        temperature: float = 0.0,
         max_interactions: int = 30,
         max_response_size: int = 129024,
         num_trials: int = 1,
@@ -96,7 +96,6 @@ class AppworldReactAgent:
         memory_workspace_id: str = "appworld_v1",
         rewrite_on_failure: bool = True,
     ):
-
         self.index: int = index
         self.task_ids: List[str] = task_ids
         self.experiment_name: str = experiment_name
@@ -115,10 +114,14 @@ class AppworldReactAgent:
         self.memory_workspace_id: str = memory_workspace_id
         self.rewrite_on_failure: bool = rewrite_on_failure
 
-        self.llm_client, self.model_name = self._create_llm_client(model_name=model_name)
+        self.llm_client, self.model_name = self._create_llm_client(
+            model_name=model_name
+        )
 
         self.history: List[List[List[dict]]] = [[] for _ in range(num_trials)]
-        self.retrieved_memory_list: List[List[List[Any]]] = [[] for _ in range(num_trials)]
+        self.retrieved_memory_list: List[List[List[Any]]] = [
+            [] for _ in range(num_trials)
+        ]
 
         for run_id in range(num_trials):
             for _ in range(len(task_ids)):
@@ -151,7 +154,13 @@ class AppworldReactAgent:
 
         return "call llm error"
 
-    def prompt_messages(self, run_id, task_index, previous_memories: Optional[List[dict]], world: AppWorld):
+    def prompt_messages(
+        self,
+        run_id,
+        task_index,
+        previous_memories: Optional[List[dict]],
+        world: AppWorld,
+    ):
         previous_memories = previous_memories or []
         app_descriptions = json.dumps(
             [
@@ -160,17 +169,31 @@ class AppworldReactAgent:
             ],
             indent=1,
         )
-        dictionary = {"supervisor": world.task.supervisor, "app_descriptions": app_descriptions}
+        dictionary = {
+            "supervisor": world.task.supervisor,
+            "app_descriptions": app_descriptions,
+        }
         sys_prompt = Template(NEW_PROMPT_TEMPLATE.lstrip()).render(dictionary)
         query = world.task.instruction
         if self.use_memory:
             if len(previous_memories) == 0:
                 response = self.get_memory(world.task.instruction)
                 if response and "memory_list" in response["metadata"]:
-                    self.retrieved_memory_list[run_id][task_index] = response["metadata"]["memory_list"]
+                    self.retrieved_memory_list[run_id][task_index] = response[
+                        "metadata"
+                    ]["memory_list"]
                     task_memory = response["answer"]
                     logger.info(f"loaded task_memory: {task_memory}")
-                    query = "Task:\n" + query + "\n\nSome Related Experience to help you to complete the task:\n" + re.sub(r'(?i)\bMemory\s*(\d+)\s*[:]', r'Experience \1:', task_memory)
+                    query = (
+                        "Task:\n"
+                        + query
+                        + "\n\nSome Related Experience to help you to complete the task:\n"
+                        + re.sub(
+                            r"(?i)\bMemory\s*(\d+)\s*[:]",
+                            r"Experience \1:",
+                            task_memory,
+                        )
+                    )
             else:
                 # Retry scenario: use memories extracted from previous failed attempts.
                 # Prefer a compact block (especially when it contains a single rewritten_context).
@@ -191,10 +214,9 @@ class AppworldReactAgent:
                     )
         messages = [
             {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": query}
+            {"role": "user", "content": query},
         ]
         self.history[run_id][task_index] = messages
-
 
     @staticmethod
     def get_reward(world) -> float:
@@ -238,26 +260,43 @@ class AppworldReactAgent:
     def execute(self):
         result = []
         counter = 0
-        for task_index, task_id in enumerate(tqdm(self.task_ids, desc=f"ray_index={self.index}")):
+        for task_index, task_id in enumerate(
+            tqdm(self.task_ids, desc=f"ray_index={self.index}")
+        ):
             t_result = None
             previous_memories = []
             # Run each task num_trials times
             for run_id in range(self.num_trials):
                 start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with AppWorld(task_id=task_id, experiment_name=f"{self.experiment_name}_run_{run_id}") as world:
+                with AppWorld(
+                    task_id=task_id,
+                    experiment_name=f"{self.experiment_name}_run_{run_id}",
+                ) as world:
                     before_score = self.get_reward(world)
                     for i in range(self.max_interactions):
                         if i == 0:
-                            self.prompt_messages(run_id=run_id, task_index=task_index, previous_memories=previous_memories, world=world)
+                            self.prompt_messages(
+                                run_id=run_id,
+                                task_index=task_index,
+                                previous_memories=previous_memories,
+                                world=world,
+                            )
                         code_msg = self.call_llm(self.history[run_id][task_index])
                         code, text = self.extract_code_and_fix_content(code_msg)
-                        self.history[run_id][task_index].append({"role": "assistant", "content": code})
+                        self.history[run_id][task_index].append(
+                            {"role": "assistant", "content": code}
+                        )
 
                         output = world.execute(code)
                         # if len(output) > self.max_response_size:
                         #     # logger.warning(f"output exceed max size={len(output)}")
                         #     output = output[: self.max_response_size]
-                        self.history[run_id][task_index].append({"role": "user", "content": "Output:\n```\n" + output + "```\n\n"})
+                        self.history[run_id][task_index].append(
+                            {
+                                "role": "user",
+                                "content": "Output:\n```\n" + output + "```\n\n",
+                            }
+                        )
 
                         if world.task_completed():
                             break
@@ -267,8 +306,16 @@ class AppworldReactAgent:
 
                     if self.use_memory:
                         if self.use_memory_addition:
-                            new_traj_list = [self.get_traj_from_task_history(task_id, self.history[run_id][task_index], after_score)]
-                            should_rewrite = self.rewrite_on_failure and after_score != 1
+                            new_traj_list = [
+                                self.get_traj_from_task_history(
+                                    task_id,
+                                    self.history[run_id][task_index],
+                                    after_score,
+                                )
+                            ]
+                            should_rewrite = (
+                                self.rewrite_on_failure and after_score != 1
+                            )
                             created_memories, rewritten_context = self.add_memory(
                                 new_traj_list,
                                 query=world.task.instruction,
@@ -286,17 +333,26 @@ class AppworldReactAgent:
                                     self.delete_memory_by_ids(delete_ids)
 
                             # Next trial: prefer rewritten guidance when available.
-                            if after_score != 1 and isinstance(rewritten_context, str) and rewritten_context.strip():
-                                previous_memories = [{"content": rewritten_context.strip()}]
+                            if (
+                                after_score != 1
+                                and isinstance(rewritten_context, str)
+                                and rewritten_context.strip()
+                            ):
+                                previous_memories = [
+                                    {"content": rewritten_context.strip()}
+                                ]
                             else:
                                 previous_memories = created_memories
 
                         # update the freq & utility attributes of retrieved memories
                         update_utility: bool = after_score == 1
-                        self.update_memory_information(self.retrieved_memory_list[run_id][task_index], update_utility)
+                        self.update_memory_information(
+                            self.retrieved_memory_list[run_id][task_index],
+                            update_utility,
+                        )
 
                     counter += 1
-                    if self.use_memory_deletion: # and counter % self.delete_freq == 0:
+                    if self.use_memory_deletion:  # and counter % self.delete_freq == 0:
                         self.delete_memory()
 
                     t_result = {
@@ -342,16 +398,18 @@ class AppworldReactAgent:
         logger.info(f"query: {query}, response: {result}")
         return result
 
-    def get_traj_from_task_history(self, task_id: str, task_history: list, reward: float):
+    def get_traj_from_task_history(
+        self, task_id: str, task_history: list, reward: float
+    ):
         pattern = r"\n\nSome Related Experience to help you to complete the task:.*"
-        task_history[1]["content"] = re.sub(pattern, "", task_history[1]["content"], flags=re.DOTALL)
-        return {
-            "task_id": task_id,
-            "messages": task_history,
-            "score": reward
-        }
+        task_history[1]["content"] = re.sub(
+            pattern, "", task_history[1]["content"], flags=re.DOTALL
+        )
+        return {"task_id": task_id, "messages": task_history, "score": reward}
 
-    def add_memory(self, trajectories, *, query: Optional[str] = None, rewrite: bool = False):
+    def add_memory(
+        self, trajectories, *, query: Optional[str] = None, rewrite: bool = False
+    ):
         """Generate task memories from trajectories.
 
         - rewrite=False: calls `summary_task_memory` and returns (memory_list, "").
@@ -393,8 +451,8 @@ class AppworldReactAgent:
             json={
                 "workspace_id": self.memory_workspace_id,
                 "action": "delete_ids",
-                "memory_ids": memory_ids
-            }
+                "memory_ids": memory_ids,
+            },
         )
         response.raise_for_status()
 
@@ -421,10 +479,13 @@ class AppworldReactAgent:
         )
         response.raise_for_status()
 
+
 def main():
     dataset_name = "train"
     task_ids = load_task_ids(dataset_name)
-    agent = AppworldReactAgent(index=0, task_ids=task_ids[0:1], experiment_name=dataset_name, num_trials=1)
+    agent = AppworldReactAgent(
+        index=0, task_ids=task_ids[0:1], experiment_name=dataset_name, num_trials=1
+    )
     result = agent.execute()
     logger.info(f"result={json.dumps(result)}")
 

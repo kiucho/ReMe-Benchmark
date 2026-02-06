@@ -28,13 +28,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         default="w_mem_warm",
         choices=["wo_mem", "w_mem_cold", "w_mem_warm"],
         help=(
-            "Benchmark mode: wo_mem (no memory), w_mem_cold (load starting memories then run), "
-            "w_mem_warm (do not load starting memories; use existing workspace as-is)"
+            "Benchmark mode: wo_mem (no memory), "
+            "w_mem_cold (fresh empty workspace; accumulate online), "
+            "w_mem_warm (load provided starting memory, then evaluate and keep accumulating)"
         ),
     )
 
-    parser.add_argument("--backend-model", default="gpt-oss-120b", help="LLM backend model name")
-    parser.add_argument("--dataset-name", default="test_normal", help="AppWorld dataset name")
+    parser.add_argument(
+        "--backend-model", default="gpt-oss-120b", help="LLM backend model name"
+    )
+    parser.add_argument(
+        "--dataset-name", default="test_normal", help="AppWorld dataset name"
+    )
     parser.add_argument(
         "--experiment-name",
         default=None,
@@ -48,12 +53,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num-trials", type=int, default=2)
 
     parser.add_argument("--use-memory-addition", action="store_true", default=True)
-    parser.add_argument("--no-use-memory-addition", action="store_false", dest="use_memory_addition")
+    parser.add_argument(
+        "--no-use-memory-addition", action="store_false", dest="use_memory_addition"
+    )
     parser.add_argument("--use-memory-deletion", action="store_true", default=True)
-    parser.add_argument("--no-use-memory-deletion", action="store_false", dest="use_memory_deletion")
+    parser.add_argument(
+        "--no-use-memory-deletion", action="store_false", dest="use_memory_deletion"
+    )
 
     parser.add_argument("--rewrite-on-failure", action="store_true", default=True)
-    parser.add_argument("--no-rewrite-on-failure", action="store_false", dest="rewrite_on_failure")
+    parser.add_argument(
+        "--no-rewrite-on-failure", action="store_false", dest="rewrite_on_failure"
+    )
 
     parser.add_argument("--delete-freq", type=int, default=5)
     parser.add_argument("--freq-threshold", type=int, default=5)
@@ -63,8 +74,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--memory-api-url", default="http://0.0.0.0:8002/")
     parser.add_argument(
         "--starting-memory-path",
-        default="docs/library",
-        help="Vector-store side path used by /vector_store load action (only for cold start)",
+        default=None,
+        help=(
+            "Path to a prebuilt memory dump to load as starting memory (required for warm start)."
+        ),
     )
 
     return parser
@@ -95,7 +108,9 @@ def delete_workspace(workspace_id: str, api_url: str = "http://0.0.0.0:8002/"):
         print(f"Workspace '{workspace_id}' deleted successfully")
 
 
-def dump_memory(workspace_id: str, path: str = "./", api_url: str = "http://0.0.0.0:8002/"):
+def dump_memory(
+    workspace_id: str, path: str = "./", api_url: str = "http://0.0.0.0:8002/"
+):
     """Dump the vector store memories to disk"""
     response = requests.post(
         url=f"{api_url}vector_store",
@@ -111,7 +126,9 @@ def dump_memory(workspace_id: str, path: str = "./", api_url: str = "http://0.0.
         print(f"Memory dumped to {path}")
 
 
-def load_memory(workspace_id: str, path: str = "docs/library", api_url: str = "http://0.0.0.0:8002/"):
+def load_memory(
+    workspace_id: str, path: str = "docs/library", api_url: str = "http://0.0.0.0:8002/"
+):
     """Load memories from disk into the vector store"""
     response = requests.post(
         url=f"{api_url}vector_store",
@@ -142,7 +159,7 @@ def run_agent(
     utility_threshold: float = 0.5,
     workspace_id: str = "appworld_v1",
     api_url: str = "http://0.0.0.0:8002/",
-    batch_size: int = 4
+    batch_size: int = 4,
 ):
     path: Path = Path(f"./exp_result/{model_name}")
     path.mkdir(parents=True, exist_ok=True)
@@ -160,7 +177,9 @@ def run_agent(
         total_tasks = len(task_ids)
         num_batches = (total_tasks + batch_size - 1) // batch_size  # Ceiling division
 
-        logger.info(f"Total tasks: {total_tasks}, Batch size: {batch_size}, Number of batches: {num_batches}")
+        logger.info(
+            f"Total tasks: {total_tasks}, Batch size: {batch_size}, Number of batches: {num_batches}"
+        )
 
         for batch_idx in range(num_batches):
             # Initialize Ray for this batch
@@ -168,7 +187,9 @@ def run_agent(
             end_idx = min(start_idx + batch_size, total_tasks)
             batch_task_ids = task_ids[start_idx:end_idx]
 
-            logger.info(f"Starting batch {batch_idx + 1}/{num_batches} with {len(batch_task_ids)} tasks")
+            logger.info(
+                f"Starting batch {batch_idx + 1}/{num_batches} with {len(batch_task_ids)} tasks"
+            )
 
             # Initialize Ray with the number of CPUs needed for this batch
             ray.init(num_cpus=len(batch_task_ids))
@@ -178,7 +199,7 @@ def run_agent(
             future_list: list = []
             for i, task_id in enumerate(batch_task_ids):
                 actor = RemoteAppworldReactAgent.remote(
-                    index=start_idx+i,
+                    index=start_idx + i,
                     model_name=model_name,
                     task_ids=[task_id],
                     experiment_name=experiment_name,
@@ -197,7 +218,9 @@ def run_agent(
                 future_list.append(future)
                 time.sleep(1)
 
-            logger.info(f"Batch {batch_idx + 1} submit complete, waiting for results...")
+            logger.info(
+                f"Batch {batch_idx + 1} submit complete, waiting for results..."
+            )
 
             # Collect results from this batch
             for i, (task_id, future) in enumerate(zip(batch_task_ids, future_list)):
@@ -211,11 +234,15 @@ def run_agent(
                 except Exception as e:
                     logger.exception(f"run ray error with task_id={task_id}")
 
-                logger.info(f"Batch {batch_idx + 1}: task {i + 1}/{len(batch_task_ids)} complete")
+                logger.info(
+                    f"Batch {batch_idx + 1}: task {i + 1}/{len(batch_task_ids)} complete"
+                )
 
             # Shutdown Ray to free resources before next batch
             ray.shutdown()
-            logger.info(f"Batch {batch_idx + 1}/{num_batches} complete, Ray resources released")
+            logger.info(
+                f"Batch {batch_idx + 1}/{num_batches} complete, Ray resources released"
+            )
 
             # Optional: small delay between batches
             if batch_idx < num_batches - 1:
@@ -248,53 +275,98 @@ def run_agent(
                 result.append(task_results)
         dump_file()
 
+
 def main():
     parser = _build_arg_parser()
     args = parser.parse_args()
 
-    if args.mode == "wo_mem":
-        use_memory = False
-        delete_workspace_first = False
-        load_starting_memory = False
-    elif args.mode == "w_mem_cold":
-        use_memory = True
-        delete_workspace_first = True
-        load_starting_memory = True
-    elif args.mode == "w_mem_warm":
-        use_memory = True
-        delete_workspace_first = False
-        load_starting_memory = False
-    else:
+    if args.mode not in {"wo_mem", "w_mem_cold", "w_mem_warm"}:
         raise ValueError(f"Unsupported mode: {args.mode}")
 
     experiment_name = args.experiment_name
     if not experiment_name:
         experiment_name = f"{args.dataset_name}_{args.mode}"
 
-    if use_memory and delete_workspace_first:
+    def reset_workspace(load_path: str | None = None):
         logger.info("Deleting workspace...")
-        delete_workspace(workspace_id=args.memory_workspace_id, api_url=args.memory_api_url)
-        time.sleep(5)
-
-    if use_memory and load_starting_memory:
-        logger.info("Loading starting memories...")
-        load_memory(
-            workspace_id=args.memory_workspace_id,
-            path=args.starting_memory_path,
-            api_url=args.memory_api_url,
+        delete_workspace(
+            workspace_id=args.memory_workspace_id, api_url=args.memory_api_url
         )
+        time.sleep(2)
+        if load_path:
+            logger.info(f"Loading starting memories from {load_path}...")
+            load_memory(
+                workspace_id=args.memory_workspace_id,
+                path=load_path,
+                api_url=args.memory_api_url,
+            )
+
+    # wo_mem: no memory calls
+    if args.mode == "wo_mem":
+        for _ in range(args.num_runs):
+            run_agent(
+                model_name=args.backend_model,
+                dataset_name=args.dataset_name,
+                experiment_name=experiment_name,
+                max_workers=args.max_workers,
+                num_trials=args.num_trials,
+                use_memory=False,
+                use_memory_addition=False,
+                use_memory_deletion=False,
+                rewrite_on_failure=args.rewrite_on_failure,
+                delete_freq=args.delete_freq,
+                freq_threshold=args.freq_threshold,
+                utility_threshold=args.utility_threshold,
+                workspace_id=args.memory_workspace_id,
+                api_url=args.memory_api_url,
+                batch_size=args.batch_size,
+            )
+        return
+
+    # w_mem_cold: start empty, then accumulate sequentially
+    if args.mode == "w_mem_cold":
+        if args.starting_memory_path:
+            logger.warning(
+                "Ignoring --starting-memory-path for w_mem_cold (cold start builds from empty workspace)."
+            )
+        for _ in range(args.num_runs):
+            reset_workspace(load_path=None)
+            run_agent(
+                model_name=args.backend_model,
+                dataset_name=args.dataset_name,
+                experiment_name=experiment_name,
+                max_workers=args.max_workers,
+                num_trials=args.num_trials,
+                use_memory=True,
+                use_memory_addition=args.use_memory_addition,
+                use_memory_deletion=args.use_memory_deletion,
+                rewrite_on_failure=args.rewrite_on_failure,
+                delete_freq=args.delete_freq,
+                freq_threshold=args.freq_threshold,
+                utility_threshold=args.utility_threshold,
+                workspace_id=args.memory_workspace_id,
+                api_url=args.memory_api_url,
+                batch_size=args.batch_size,
+            )
+        return
+
+    # w_mem_warm: load provided starting memory, then evaluate and keep accumulating.
+    starting_memory_path = args.starting_memory_path
+    if not starting_memory_path:
+        raise ValueError("w_mem_warm requires --starting-memory-path")
 
     for _ in range(args.num_runs):
+        reset_workspace(load_path=starting_memory_path)
         run_agent(
             model_name=args.backend_model,
             dataset_name=args.dataset_name,
             experiment_name=experiment_name,
             max_workers=args.max_workers,
             num_trials=args.num_trials,
-            use_memory=use_memory,
-            use_memory_addition=args.use_memory_addition if use_memory else False,
-            use_memory_deletion=args.use_memory_deletion if use_memory else False,
-            rewrite_on_failure=args.rewrite_on_failure if use_memory else False,
+            use_memory=True,
+            use_memory_addition=args.use_memory_addition,
+            use_memory_deletion=args.use_memory_deletion,
+            rewrite_on_failure=args.rewrite_on_failure,
             delete_freq=args.delete_freq,
             freq_threshold=args.freq_threshold,
             utility_threshold=args.utility_threshold,
@@ -302,6 +374,7 @@ def main():
             api_url=args.memory_api_url,
             batch_size=args.batch_size,
         )
+
 
 if __name__ == "__main__":
     main()

@@ -50,11 +50,11 @@ Run from this directory so the relative `.env` path resolves correctly:
 ```bash
 cd cookbook/appworld
 
-# warm start with memory (default)
-python3 run_appworld.py --mode w_mem_warm
+# warm start with an existing starting pool
+python3 run_appworld.py --mode w_mem_warm --starting-memory-path /abs/path/to/memory_dump
 
-# cold start with memory (delete workspace + load starting memory)
-python3 run_appworld.py --mode w_mem_cold --starting-memory-path docs/library
+# cold start with memory (empty workspace; accumulate online)
+python3 run_appworld.py --mode w_mem_cold
 
 # no memory
 python3 run_appworld.py --mode wo_mem
@@ -74,8 +74,8 @@ cd cookbook/appworld
 
 Mode definitions:
 - `wo_mem`: no memory calls
-- `w_mem_cold`: load starting memories, then run (this script also deletes the workspace first for a clean start)
-- `w_mem_warm`: do not load starting memories; run using the existing workspace as-is
+- `w_mem_cold`: start from an empty workspace and accumulate memories sequentially
+- `w_mem_warm`: load a provided starting pool, then keep accumulating
 
 ## Common arguments
 
