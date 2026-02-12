@@ -89,6 +89,9 @@ class AppworldReactAgent:
         use_memory: bool = False,
         use_memory_addition: bool = False,
         use_memory_deletion: bool = False,
+        use_memory_retrieval: bool = True,
+        keep_failure_memories: bool = False,
+        stop_on_success: bool = True,
         delete_freq: int = 10,
         freq_threshold: int = 5,
         utility_threshold: float = 0.5,
@@ -107,6 +110,9 @@ class AppworldReactAgent:
         self.use_memory: bool = use_memory
         self.use_memory_addition: bool = use_memory_addition if use_memory else False
         self.use_memory_deletion: bool = use_memory_deletion if use_memory else False
+        self.use_memory_retrieval: bool = use_memory_retrieval if use_memory else False
+        self.keep_failure_memories: bool = keep_failure_memories if use_memory else False
+        self.stop_on_success: bool = stop_on_success
         self.delete_freq: int = delete_freq
         self.freq_threshold: int = freq_threshold
         self.utility_threshold: float = utility_threshold
@@ -128,8 +134,54 @@ class AppworldReactAgent:
                 self.retrieved_memory_list[run_id].append([])
                 self.history[run_id].append([])
 
-    def call_llm(self, messages: list) -> str:
-        for i in range(100):
+    @staticmethod
+    def _extract_usage(response: Any) -> dict[str, int] | None:
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return None
+
+        def _value(key: str) -> int:
+            if isinstance(usage, dict):
+                value = usage.get(key, 0)
+            else:
+                value = getattr(usage, key, 0)
+            if isinstance(value, int):
+                return value
+            if isinstance(value, float):
+                return int(value)
+            return 0
+
+        return {
+            "prompt_tokens": _value("prompt_tokens"),
+            "completion_tokens": _value("completion_tokens"),
+            "total_tokens": _value("total_tokens"),
+        }
+
+    @staticmethod
+    def _get_world_api_call_count(world: AppWorld) -> int | None:
+        requester = getattr(world, "requester", None)
+        if requester is not None:
+            request_tracker = getattr(requester, "request_tracker", None)
+            requests = getattr(request_tracker, "requests", None)
+            if isinstance(requests, list):
+                return len(requests)
+
+        output_logs_directory = getattr(world, "output_logs_directory", None)
+        if not output_logs_directory:
+            return None
+
+        api_calls_path = os.path.join(output_logs_directory, "api_calls.jsonl")
+        if not os.path.exists(api_calls_path):
+            return 0
+
+        try:
+            with open(api_calls_path, "r", encoding="utf-8") as file:
+                return sum(1 for line in file if line.strip())
+        except Exception:
+            return None
+
+    def call_llm(self, messages: list) -> tuple[str, dict[str, int] | None]:
+        for i in range(10):
             try:
                 request_kwargs = {
                     "model": self.model_name,
@@ -146,13 +198,20 @@ class AppworldReactAgent:
 
                 response = self.llm_client.chat.completions.create(**request_kwargs)
 
-                return response.choices[0].message.content
+                message_content = response.choices[0].message.content or ""
+                return message_content, self._extract_usage(response)
 
             except Exception as e:
                 logger.exception(f"encounter error with {e.args}")
-                time.sleep(1 + i * 10)
+                print("\n=== FAILING LLM INPUT START ===", flush=True)
+                try:
+                    print(json.dumps(request_kwargs, ensure_ascii=False, indent=2), flush=True)
+                except Exception:
+                    print(str(request_kwargs), flush=True)
+                print("=== FAILING LLM INPUT END ===\n", flush=True)
+                raise SystemExit(1) from e
 
-        return "call llm error"
+        return "call llm error", None
 
     def prompt_messages(
         self,
@@ -176,7 +235,7 @@ class AppworldReactAgent:
         sys_prompt = Template(NEW_PROMPT_TEMPLATE.lstrip()).render(dictionary)
         query = world.task.instruction
         if self.use_memory:
-            if len(previous_memories) == 0:
+            if self.use_memory_retrieval and len(previous_memories) == 0:
                 response = self.get_memory(world.task.instruction)
                 if response and "memory_list" in response["metadata"]:
                     self.retrieved_memory_list[run_id][task_index] = response[
@@ -260,19 +319,45 @@ class AppworldReactAgent:
     def execute(self):
         result = []
         counter = 0
+        total_tasks = len(self.task_ids)
         for task_index, task_id in enumerate(
             tqdm(self.task_ids, desc=f"ray_index={self.index}")
         ):
-            t_result = None
+            logger.info(
+                "ray_index={} task={}/{} task_id={} start",
+                self.index,
+                task_index + 1,
+                total_tasks,
+                task_id,
+            )
             previous_memories = []
             # Run each task num_trials times
             for run_id in range(self.num_trials):
+                logger.info(
+                    "ray_index={} task_id={} run={}/{} start",
+                    self.index,
+                    task_id,
+                    run_id + 1,
+                    self.num_trials,
+                )
                 start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 with AppWorld(
                     task_id=task_id,
                     experiment_name=f"{self.experiment_name}_run_{run_id}",
                 ) as world:
                     before_score = self.get_reward(world)
+                    initial_api_call_count = self._get_world_api_call_count(world)
+                    memory_count_before_trial = (
+                        self.count_memories() if self.use_memory else None
+                    )
+
+                    prompt_tokens = 0
+                    completion_tokens = 0
+                    total_tokens = 0
+                    token_usage_recorded_steps = 0
+                    token_usage_missing_steps = 0
+                    llm_steps = 0
+                    env_steps = 0
                     for i in range(self.max_interactions):
                         if i == 0:
                             self.prompt_messages(
@@ -281,13 +366,23 @@ class AppworldReactAgent:
                                 previous_memories=previous_memories,
                                 world=world,
                             )
-                        code_msg = self.call_llm(self.history[run_id][task_index])
+                        llm_steps += 1
+                        code_msg, usage = self.call_llm(self.history[run_id][task_index])
+                        if usage is None:
+                            token_usage_missing_steps += 1
+                        else:
+                            token_usage_recorded_steps += 1
+                            prompt_tokens += usage.get("prompt_tokens", 0)
+                            completion_tokens += usage.get("completion_tokens", 0)
+                            total_tokens += usage.get("total_tokens", 0)
+
                         code, text = self.extract_code_and_fix_content(code_msg)
                         self.history[run_id][task_index].append(
                             {"role": "assistant", "content": code}
                         )
 
                         output = world.execute(code)
+                        env_steps += 1
                         # if len(output) > self.max_response_size:
                         #     # logger.warning(f"output exceed max size={len(output)}")
                         #     output = output[: self.max_response_size]
@@ -300,6 +395,17 @@ class AppworldReactAgent:
 
                         if world.task_completed():
                             break
+
+                    final_api_call_count = self._get_world_api_call_count(world)
+                    if (
+                        initial_api_call_count is not None
+                        and final_api_call_count is not None
+                    ):
+                        tool_calls = max(
+                            0, final_api_call_count - initial_api_call_count
+                        )
+                    else:
+                        tool_calls = None
 
                     after_score = self.get_reward(world)
                     uplift_score = after_score - before_score
@@ -314,7 +420,9 @@ class AppworldReactAgent:
                                 )
                             ]
                             should_rewrite = (
-                                self.rewrite_on_failure and after_score != 1
+                                self.rewrite_on_failure
+                                and after_score != 1
+                                and not self.keep_failure_memories
                             )
                             created_memories, rewritten_context = self.add_memory(
                                 new_traj_list,
@@ -323,7 +431,11 @@ class AppworldReactAgent:
                             )
 
                             # For retry experiments, avoid polluting the workspace with low-quality memories.
-                            if after_score != 1 and created_memories:
+                            if (
+                                after_score != 1
+                                and created_memories
+                                and not self.keep_failure_memories
+                            ):
                                 delete_ids = [
                                     mem.get("memory_id")
                                     for mem in created_memories
@@ -332,17 +444,18 @@ class AppworldReactAgent:
                                 if delete_ids:
                                     self.delete_memory_by_ids(delete_ids)
 
-                            # Next trial: prefer rewritten guidance when available.
-                            if (
-                                after_score != 1
-                                and isinstance(rewritten_context, str)
-                                and rewritten_context.strip()
-                            ):
-                                previous_memories = [
-                                    {"content": rewritten_context.strip()}
-                                ]
-                            else:
-                                previous_memories = created_memories
+                            # Next trial: use rewritten context for retry-only flows.
+                            if self.use_memory_retrieval and run_id + 1 < self.num_trials:
+                                if (
+                                    after_score != 1
+                                    and isinstance(rewritten_context, str)
+                                    and rewritten_context.strip()
+                                ):
+                                    previous_memories = [
+                                        {"content": rewritten_context.strip()}
+                                    ]
+                                else:
+                                    previous_memories = created_memories
 
                         # update the freq & utility attributes of retrieved memories
                         update_utility: bool = after_score == 1
@@ -355,7 +468,20 @@ class AppworldReactAgent:
                     if self.use_memory_deletion:  # and counter % self.delete_freq == 0:
                         self.delete_memory()
 
-                    t_result = {
+                    memory_count_after_trial = (
+                        self.count_memories() if self.use_memory else None
+                    )
+                    if (
+                        isinstance(memory_count_before_trial, int)
+                        and isinstance(memory_count_after_trial, int)
+                    ):
+                        memory_count_delta = (
+                            memory_count_after_trial - memory_count_before_trial
+                        )
+                    else:
+                        memory_count_delta = None
+
+                    trial_result = {
                         "task_id": world.task_id,
                         "run_id": run_id,
                         "experiment_name": self.experiment_name,
@@ -365,10 +491,32 @@ class AppworldReactAgent:
                         "uplift_score": uplift_score,
                         "task_history": self.history[run_id][task_index],
                         "task_start_time": start_time,
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": total_tokens,
+                        "llm_steps": llm_steps,
+                        "env_steps": env_steps,
+                        "tool_calls": tool_calls,
+                        "token_usage_recorded_steps": token_usage_recorded_steps,
+                        "token_usage_missing_steps": token_usage_missing_steps,
+                        "memory_count_before": memory_count_before_trial,
+                        "memory_count_after": memory_count_after_trial,
+                        "memory_count_delta": memory_count_delta,
                     }
-                    if after_score == 1:
+                    logger.info(
+                        "ray_index={} task_id={} run={}/{} done after_score={} total_tokens={} env_steps={} tool_calls={}",
+                        self.index,
+                        task_id,
+                        run_id + 1,
+                        self.num_trials,
+                        after_score,
+                        total_tokens,
+                        env_steps,
+                        tool_calls,
+                    )
+                    result.append(trial_result)
+                    if after_score == 1 and self.stop_on_success:
                         break
-            result.append(t_result)
 
         return result
 
@@ -397,6 +545,34 @@ class AppworldReactAgent:
 
         logger.info(f"query: {query}, response: {result}")
         return result
+
+    def count_memories(self) -> int | None:
+        """Count memories in current workspace."""
+        response = requests.post(
+            url=f"{self.memory_base_url}vector_store",
+            json={
+                "workspace_id": self.memory_workspace_id,
+                "action": "count",
+            },
+        )
+        result = self.handle_api_response(response)
+        if not result:
+            return None
+
+        action_result = (result.get("metadata", {}) or {}).get("action_result")
+        if isinstance(action_result, bool):
+            return None
+
+        if isinstance(action_result, (int, float)):
+            return int(action_result)
+
+        if isinstance(action_result, str):
+            try:
+                return int(action_result.strip())
+            except ValueError:
+                return None
+
+        return None
 
     def get_traj_from_task_history(
         self, task_id: str, task_history: list, reward: float

@@ -56,13 +56,16 @@ python3 run_appworld.py --mode w_mem_warm --starting-memory-path /abs/path/to/me
 # cold start with memory (empty workspace; accumulate online)
 python3 run_appworld.py --mode w_mem_cold
 
+# offline pool build (sampling-based)
+python3 run_appworld.py --mode w_mem_offline --dataset-name train --num-samples 4
+
 # no memory
 python3 run_appworld.py --mode wo_mem
 ```
 
 ## Preset scripts
 
-For convenience, you can run the three common modes via shell scripts (these will create/use `.venv-appworld` via `uv`):
+For convenience, you can run the common modes via shell scripts (these will create/use `.venv-appworld` via `uv`):
 
 ```bash
 cd cookbook/appworld
@@ -70,12 +73,14 @@ cd cookbook/appworld
 ./exp_wo_mem.sh
 ./exp_w_mem_cold.sh
 ./exp_w_mem_warm.sh
+./exp_w_mem_offline.sh
 ```
 
 Mode definitions:
 - `wo_mem`: no memory calls
 - `w_mem_cold`: start from an empty workspace and accumulate memories sequentially
 - `w_mem_warm`: load a provided starting pool, then keep accumulating
+- `w_mem_offline`: build an offline memory pool by sampling each task (`--num-samples`) with retrieval disabled (default `temperature=0.9`)
 
 ## Common arguments
 
