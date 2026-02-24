@@ -368,7 +368,7 @@ def main():
         }
         with open(manifest_path, "w") as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
-        logger.info("Memory manifest saved to {}", manifest_path)
+        logger.info("Memory manifest saved to %s", manifest_path)
 
     def dump_final_memory_and_manifest(starting_memory_path: str | None = None):
         memory_dir = Path(f"./exp_result/{experiment_name}/memory")
@@ -454,7 +454,7 @@ def main():
         if args.resume_memory:
             resume_path = args.starting_memory_path or resolved_pool_path
             if Path(resume_path).exists():
-                logger.info("Resuming offline pool from {}", resume_path)
+                logger.info("Resuming offline pool from %s", resume_path)
                 reset_workspace(load_path=resume_path)
             else:
                 logger.warning(
@@ -493,7 +493,7 @@ def main():
             api_url=args.memory_api_url,
         )
         if not dump_succeeded:
-            logger.warning("Failed to dump offline pool to {}", resolved_pool_path)
+            logger.warning("Failed to dump offline pool to %s", resolved_pool_path)
 
         write_memory_manifest(
             Path(f"./exp_result/{experiment_name}/memory/manifest.json"),

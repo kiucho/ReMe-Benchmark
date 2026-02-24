@@ -189,27 +189,13 @@ class AppworldReactAgent:
                     "temperature": self.temperature,
                 }
 
-                # Keep the default behavior for models that support these fields,
-                # but avoid sending them to the GPT-OSS backend (it may reject
-                # unknown OpenAI extensions).
-                if not self.backend_model_name.startswith("gpt-oss-120b"):
-                    request_kwargs["extra_body"] = {"enable_thinking": False}
-                    request_kwargs["seed"] = 0
-
                 response = self.llm_client.chat.completions.create(**request_kwargs)
 
-                message_content = response.choices[0].message.content or ""
-                return message_content, self._extract_usage(response)
+                return response.choices[0].message.content, self._extract_usage(response)
 
             except Exception as e:
-                logger.exception(f"encounter error with {e.args}")
-                print("\n=== FAILING LLM INPUT START ===", flush=True)
-                try:
-                    print(json.dumps(request_kwargs, ensure_ascii=False, indent=2), flush=True)
-                except Exception:
-                    print(str(request_kwargs), flush=True)
-                print("=== FAILING LLM INPUT END ===\n", flush=True)
-                raise SystemExit(1) from e
+                logger.warning(f"LLM call failed (attempt {i + 1}): {e}")
+                time.sleep(1 + i * 2)
 
         return "call llm error", None
 

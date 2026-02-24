@@ -266,7 +266,7 @@ flow:
 llm:
   default:
     backend: openai
-    model_name: kt-gpt-oss-rh014
+    model_name: kt/og084510-gpt-oss
     temperature: 0
     token_count:
       backend: openai
@@ -392,7 +392,7 @@ llm:
 
   kora_gpt-oss-120b:
     backend: openai
-    model_name: kt-gpt-oss-rh014
+    model_name: kt/og084510-gpt-oss
     temperature: 0
     token_count:
       backend: openai

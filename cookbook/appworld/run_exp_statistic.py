@@ -209,7 +209,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--experiment-name",
-        default=None,
+        required=True,
         help="Experiment file stem without extension (e.g., test_normal_wo_mem)",
     )
     parser.add_argument(
@@ -270,7 +270,11 @@ def run_exp_statistic(
     if model_name and not (path / model_name).exists():
         logger.warning(f"Model directory not found: {path / model_name}")
 
-    if model_name and experiment_name and not any(file.exists() for file in target_files):
+    if (
+        model_name
+        and experiment_name
+        and not any(file.exists() for file in target_files)
+    ):
         logger.warning(
             f"Experiment file not found for model={model_name}, experiment={experiment_name}"
         )
@@ -319,7 +323,9 @@ def run_exp_statistic(
             logger.warning(f"No final-attempt records found in file {file}")
             continue
 
-        logger.info(f"File {file}: final-attempt evaluation on {len(final_records)} tasks")
+        logger.info(
+            f"File {file}: final-attempt evaluation on {len(final_records)} tasks"
+        )
 
         # Calculate summary metrics from final attempts only
         file_results: dict[str, str | float] = {"file": file.name}
@@ -340,7 +346,9 @@ def run_exp_statistic(
         ]
         if final_scores:
             avg_best_at_1 = sum(final_scores) / len(final_scores)
-            avg_pass_at_1 = sum(1.0 if score >= 1.0 else 0.0 for score in final_scores) / len(final_scores)
+            avg_pass_at_1 = sum(
+                1.0 if score >= 1.0 else 0.0 for score in final_scores
+            ) / len(final_scores)
             file_results["best@1"] = avg_best_at_1
             file_results["pass@1"] = avg_pass_at_1
             logger.info(f"file={file.name} best@1={avg_best_at_1:.4f}")
@@ -434,7 +442,9 @@ def run_exp_statistic(
                 if col.startswith("final_") and col not in base_columns
             ]
         )
-        ordered_task_columns = [col for col in base_columns if col in task_df.columns] + final_telemetry_columns
+        ordered_task_columns = [
+            col for col in base_columns if col in task_df.columns
+        ] + final_telemetry_columns
         if ordered_task_columns:
             task_df = task_df[ordered_task_columns]
         task_output_path = output_dir / task_output_name
